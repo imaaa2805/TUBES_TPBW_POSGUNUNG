@@ -8,108 +8,104 @@ generator client {
 }
 
 // ============================================================
-// TABEL 1: Wilayah Administratif
+// TABEL 1: Puncak / Gunung di Pulau Jawa
 // ============================================================
-model Wilayah {
-  id         Int            @id @default(autoincrement())
-  kode       String         @unique  // contoh: KBD, KAB, CMH, KBB
-  nama       String         @unique  // Kota Bandung, Kabupaten Bandung, dll
-  tipe       String         // KOTA atau KABUPATEN
-  provinsi   String         @default("Jawa Barat")
-  latCenter  Float?         // Titik tengah koordinat wilayah
-  lngCenter  Float?
-  createdAt  DateTime       @default(now())
+model Gunung {
+  id             Int        @id @default(autoincrement())
+  nama           String     // Contoh: Gunung Lawu, Gunung Merbabu, Gunung Semeru
+  slug           String     @unique // contoh: gunung-lawu, gunung-merbabu
+  provinsi       String     // Jawa Barat, Jawa Tengah, Jawa Timur, DIY
+  kabupaten      String     // Magetan, Boyolali, Lumajang, dll
+  ketinggian     Int        // MDPL, contoh: 3265, 3145, 3676
+  statusVulkanik String     @default("Normal") // Normal, Waspada Level 2, Siaga Level 3, Awas
+  statusJalur    String     @default("Buka")   // Buka, Waspada, Tutup
+  tipeGunung     String     @default("Stratovolcano Tipe-A")
+  kuotaHarian    Int        @default(250)
+  kuotaTersisa   Int        @default(150)
+  cuacaSuhu      Int        @default(14)       // Celsius
+  cuacaKondisi   String     @default("Cerah Berawan")
+  latitude       Float?     // Koordinat titik puncak / representatif
+  longitude      Float?
+  deskripsi      String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  fasilitas  FasilitasAir[]
+  basecamps      Basecamp[]
 
-  @@index([tipe])
+  @@index([provinsi])
+  @@index([statusJalur])
+  @@index([statusVulkanik])
 }
 
 // ============================================================
-// TABEL 2: Entitas Pengelola Fasilitas Air
+// TABEL 2: Basecamp Jalur Pendakian
 // ============================================================
-model Pengelola {
-  id        Int            @id @default(autoincrement())
-  nama      String         @unique
-  tipe      String         // PERUMDA, FRANCHISE, SWADAYA, DEPOT_MANDIRI
-  kontak    String?
-  alamat    String?
-  createdAt DateTime       @default(now())
+model Basecamp {
+  id           Int           @id @default(autoincrement())
+  gunungId     Int
+  nama         String        // Contoh: Basecamp Cemoro Sewu, Basecamp Selo
+  jalurVia     String        // Contoh: Cemoro Sewu, Selo, Patakbanteng
+  totalPos     Int           @default(0)
+  status       String        @default("Buka") // Buka, Waspada, Tutup
+  latitude     Float
+  longitude    Float
+  elevasi      Int?          @default(1800) // MDPL basecamp
+  kontak       String?       // Nomor HP / WA Pengelola Basecamp
+  simaksiInfo  String?       // Info registrasi SIMAKSI online/offline
+  sumber       String?       // Catatan / sumber data
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
-  fasilitas FasilitasAir[]
+  gunung       Gunung        @relation(fields: [gunungId], references: [id], onDelete: Cascade)
+  pos          PosGunung[]
+  logPembaruan LogPembaruan[]
 
-  @@index([tipe])
+  @@index([gunungId])
+  @@index([status])
+  @@index([jalurVia])
 }
 
 // ============================================================
-// TABEL 3: Fasilitas Air (Tabel Utama)
+// TABEL 3: Pos Pendakian / Shelter / Titik Mata Air / Puncak
 // ============================================================
-model FasilitasAir {
-  id                 Int               @id @default(autoincrement())
-  no                 Int?
-  nodeId             String            @unique
-  wilayahId          Int
-  pengelolaId        Int
-  jenisFasilitas     String
-  latitude           Float
-  longitude          Float
-  statusOperasional  String            @default("Beroperasi Normal")
-  kategoriAirMinum   String            @default("Belum siap minum")
-  keteranganAirMinum String?
-  catatanData        String?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+model PosGunung {
+  id          Int      @id @default(autoincrement())
+  basecampId  Int
+  namaPos     String   // Contoh: Pos 1 Wesen-Wesen, Pos 2 Watu Gedheg, Mata Air Cetho
+  urutan      Int      @default(1) // 1, 2, 3, 4, dst.
+  latitude    Float
+  longitude   Float
+  elevasi     Int?     // MDPL perkiraan
+  adaAir      Boolean  @default(false) // Indikator sumber mata air
+  areaCamp    Boolean  @default(true)  // Cocok untuk mendirikan tenda
+  keterangan  String?
+  sumber      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  // Relasi ke tabel lain
-  wilayah            Wilayah           @relation(fields: [wilayahId], references: [id])
-  pengelola          Pengelola         @relation(fields: [pengelolaId], references: [id])
-  riwayatUjiLab      RiwayatUjiLab[]
-  logPembaruan       LogPembaruan[]
+  basecamp    Basecamp @relation(fields: [basecampId], references: [id], onDelete: Cascade)
 
-  @@index([wilayahId])
-  @@index([pengelolaId])
-  @@index([kategoriAirMinum])
-  @@index([jenisFasilitas])
-  @@index([statusOperasional])
+  @@index([basecampId])
+  @@index([adaAir])
+  @@index([urutan])
 }
 
 // ============================================================
-// TABEL 4: Riwayat Uji Laboratorium
-// ============================================================
-model RiwayatUjiLab {
-  id            Int          @id @default(autoincrement())
-  fasilitasId   Int
-  tanggalUji    DateTime
-  hasilUji      String       // LULUS, GAGAL, DALAM_PROSES
-  lembagaUji    String       // Nama lab penguji
-  parameterUji  String?      // E. Coli, Coliform, pH, Kekeruhan, dll
-  nilaiParameter String?     // Nilai hasil ukur
-  batasAman     String?      // Standar batas aman
-  catatan       String?
-  createdAt     DateTime     @default(now())
-
-  fasilitas     FasilitasAir @relation(fields: [fasilitasId], references: [id], onDelete: Cascade)
-
-  @@index([fasilitasId])
-  @@index([hasilUji])
-  @@index([tanggalUji])
-}
-
-// ============================================================
-// TABEL 5: Log Pembaruan Data (Audit Trail)
+// TABEL 4: Log Audit & Pembaruan Status
 // ============================================================
 model LogPembaruan {
-  id          Int          @id @default(autoincrement())
-  fasilitasId Int
-  fieldDiubah String       // Nama field yang diubah
-  nilaiLama   String?      // Nilai sebelumnya
-  nilaiBaru   String?      // Nilai setelah diubah
-  diubahOleh  String       @default("Sistem")
+  id          Int       @id @default(autoincrement())
+  basecampId  Int?
+  posId       Int?
+  fieldDiubah String
+  nilaiLama   String?
+  nilaiBaru   String?
+  diubahOleh  String    @default("Petugas Geospasial")
   keterangan  String?
-  createdAt   DateTime     @default(now())
+  createdAt   DateTime  @default(now())
 
-  fasilitas   FasilitasAir @relation(fields: [fasilitasId], references: [id], onDelete: Cascade)
+  basecamp    Basecamp? @relation(fields: [basecampId], references: [id], onDelete: Cascade)
 
-  @@index([fasilitasId])
+  @@index([basecampId])
   @@index([createdAt])
 }

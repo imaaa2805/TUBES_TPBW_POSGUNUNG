@@ -1,24 +1,39 @@
 const express = require('express');
 const router = express.Router();
-const fasilitasController = require('../controllers/fasilitasController');
+const pendakianController = require('../controllers/pendakianController');
 
 // Statistics Endpoint
-router.get('/stats', fasilitasController.getStats);
+router.get('/stats', pendakianController.getStats);
 
-// Master Data: Wilayah
-router.get('/wilayah', fasilitasController.getWilayah);
+// Gunung Endpoints (CRUD)
+router.get('/gunung', pendakianController.getAllGunung);
+router.get('/gunung/:id', pendakianController.getGunungById);
+router.post('/gunung', pendakianController.createGunung);
+router.put('/gunung/:id', pendakianController.updateGunung);
+router.delete('/gunung/:id', pendakianController.deleteGunung);
 
-// Master Data: Pengelola
-router.get('/pengelola', fasilitasController.getPengelola);
+// Basecamp Endpoints (CRUD)
+router.get('/basecamp', pendakianController.getAllBasecamp);
+router.get('/basecamp/:id', pendakianController.getBasecampById);
+router.post('/basecamp', pendakianController.createBasecamp);
+router.put('/basecamp/:id', pendakianController.updateBasecamp);
+router.delete('/basecamp/:id', pendakianController.deleteBasecamp);
 
-// Navigation & Routing (OSRM In-App Turn-by-Turn)
-router.get('/route', fasilitasController.getRouteNavigation);
+// Pos Pendakian Endpoints (CRUD)
+router.get('/pos', pendakianController.getAllPos);
+router.post('/pos', pendakianController.createPos);
+router.put('/pos/:id', pendakianController.updatePos);
+router.delete('/pos/:id', pendakianController.deletePos);
 
-// Facilities Endpoints (CRUD)
-router.get('/fasilitas', fasilitasController.getAllFasilitas);
-router.get('/fasilitas/:id', fasilitasController.getFasilitasById);
-router.post('/fasilitas', fasilitasController.createFasilitas);
-router.put('/fasilitas/:id', fasilitasController.updateFasilitas);
-router.delete('/fasilitas/:id', fasilitasController.deleteFasilitas);
+// Navigation & GPX
+router.get('/route', pendakianController.getRouteNavigation);
+router.get('/gpx/:basecampId', pendakianController.exportGpx);
+
+// Backward Compatibility Aliases for fasilitas
+router.get('/fasilitas', pendakianController.getAllBasecamp);
+router.get('/fasilitas/:id', pendakianController.getBasecampById);
+router.post('/fasilitas', pendakianController.createBasecamp);
+router.put('/fasilitas/:id', pendakianController.updateBasecamp);
+router.delete('/fasilitas/:id', pendakianController.deleteBasecamp);
 
 module.exports = router;

@@ -3,185 +3,241 @@ const path = require('path');
 const csv = require('csv-parser');
 const prisma = require('../config/database');
 
-// ============================================================
-// DATA MASTER: Wilayah (sesuai data CSV Bandung Raya)
-// ============================================================
-const MASTER_WILAYAH = [
-  { kode: 'KBD', nama: 'Kota Bandung',           tipe: 'KOTA',       latCenter: -6.9175,  lngCenter: 107.6191 },
-  { kode: 'KAB', nama: 'Kabupaten Bandung',       tipe: 'KABUPATEN',  latCenter: -7.1167,  lngCenter: 107.6500 },
-  { kode: 'CMH', nama: 'Kota Cimahi',             tipe: 'KOTA',       latCenter: -6.8724,  lngCenter: 107.5420 },
-  { kode: 'KBB', nama: 'Kabupaten Bandung Barat', tipe: 'KABUPATEN',  latCenter: -6.8500,  lngCenter: 107.4500 },
-];
-
-// ============================================================
-// DATA MASTER: Pengelola (sesuai data CSV)
-// ============================================================
-const MASTER_PENGELOLA = [
-  { nama: 'Perumda Tirtawening',  tipe: 'PERUMDA',       kontak: '(022) 4260490', alamat: 'Jl. Badaksinga No.10, Bandung' },
-  { nama: 'Perumda Tirta Raharja',tipe: 'PERUMDA',       kontak: '(022) 5940645', alamat: 'Jl. Raya Soreang, Kabupaten Bandung' },
-  { nama: 'Franchise',            tipe: 'FRANCHISE',     kontak: null,            alamat: null },
-  { nama: 'Swadaya Masyarakat',   tipe: 'SWADAYA',       kontak: null,            alamat: null },
-  { nama: 'Depot Mandiri',        tipe: 'DEPOT_MANDIRI', kontak: null,            alamat: null },
-  { nama: 'Lainnya',              tipe: 'LAINNYA',       kontak: null,            alamat: null },
-];
-
-// Fungsi normalisasi nama wilayah dari CSV
-function normalizeWilayah(raw) {
-  const val = (raw || '').trim().toLowerCase();
-  if (val.includes('kota bandung') || val === 'bandung') return 'Kota Bandung';
-  if (val.includes('kab') && val.includes('barat')) return 'Kabupaten Bandung Barat';
-  if (val.includes('kab')) return 'Kabupaten Bandung';
-  if (val.includes('cimahi')) return 'Kota Cimahi';
-  return 'Kota Bandung'; // default fallback
+// Helper to create URL-safe slug
+function slugify(text) {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\-]+/g, '')
+    .replace(/\-\-+/g, '-');
 }
 
-// Fungsi normalisasi nama pengelola dari CSV
-function normalizePengelola(raw) {
-  const val = (raw || '').trim().toLowerCase();
-  if (val.includes('tirtawening')) return 'Perumda Tirtawening';
-  if (val.includes('tirta raharja')) return 'Perumda Tirta Raharja';
-  if (val.includes('franchise')) return 'Franchise';
-  if (val.includes('swadaya')) return 'Swadaya Masyarakat';
-  if (val.includes('depot')) return 'Depot Mandiri';
-  return 'Lainnya';
+// Helper to parse numbers safely
+function parseElevation(str) {
+  if (!str) return 2000;
+  const num = parseInt(str.toString().replace(/[^0-9]/g, ''), 10);
+  return isNaN(num) || num === 0 ? 2000 : num;
+}
+
+// Special status for active volcanic / restricted peaks
+function getMountainStatus(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('semeru')) {
+    return { statusVulkanik: 'Siaga Level 3', statusJalur: 'Tutup', kuotaHarian: 0, kuotaTersisa: 0 };
+  }
+  if (n.includes('merapi') && !n.includes('merbabu')) {
+    return { statusVulkanik: 'Siaga Level 3', statusJalur: 'Tutup', kuotaHarian: 0, kuotaTersisa: 0 };
+  }
+  if (n.includes('slamet')) {
+    return { statusVulkanik: 'Waspada Level 2', statusJalur: 'Waspada', kuotaHarian: 200, kuotaTersisa: 85 };
+  }
+  if (n.includes('raung')) {
+    return { statusVulkanik: 'Waspada Level 2', statusJalur: 'Waspada', kuotaHarian: 150, kuotaTersisa: 40 };
+  }
+  if (n.includes('bromo')) {
+    return { statusVulkanik: 'Waspada Level 2', statusJalur: 'Waspada', kuotaHarian: 300, kuotaTersisa: 120 };
+  }
+  return { statusVulkanik: 'Normal', statusJalur: 'Buka', kuotaHarian: 250, kuotaTersisa: Math.floor(Math.random() * 120 + 80) };
+}
+
+// Water source detection
+const WATER_KEYWORDS = ['air', 'mata air', 'sendang', 'sumber', 'ranu', 'banyu', 'sungai', 'curug', 'danau', 'sumur', 'pancuran'];
+function checkWaterAvailability(posName) {
+  const lower = (posName || '').toLowerCase();
+  return WATER_KEYWORDS.some(k => lower.includes(k));
 }
 
 async function seed() {
-  console.log('🌱 Starting multi-table database seeding...\n');
+  console.log('🏔️ Memulai seeding database Jalur Pendakian & Pos Gunung Pulau Jawa...\n');
 
-  const csvFilePath = path.join(__dirname, '..', 'database', 'Data Air Bersih_TPWB(Data Air Bersih).csv');
-
-  if (!fs.existsSync(csvFilePath)) {
-    console.error(`❌ CSV file not found at: ${csvFilePath}`);
+  const csvPath = path.join(__dirname, '..', 'database', 'jalur_pendakian.csv');
+  if (!fs.existsSync(csvPath)) {
+    console.error(`❌ File CSV tidak ditemukan di: ${csvPath}`);
     process.exit(1);
   }
 
-  // ─── STEP 1: Bersihkan semua tabel (urutan penting karena ada FK) ───────
-  console.log('🧹 Clearing existing data...');
+  // 1. Bersihkan data lama
+  console.log('🧹 Menghapus data lama...');
   await prisma.logPembaruan.deleteMany({});
-  await prisma.riwayatUjiLab.deleteMany({});
-  await prisma.fasilitasAir.deleteMany({});
-  await prisma.pengelola.deleteMany({});
-  await prisma.wilayah.deleteMany({});
-  console.log('   ✔ All tables cleared.\n');
+  await prisma.posGunung.deleteMany({});
+  await prisma.basecamp.deleteMany({});
+  await prisma.gunung.deleteMany({});
+  console.log('✅ Data lama berhasil dibersihkan.\n');
 
-  // ─── STEP 2: Seed tabel Wilayah ─────────────────────────────────────────
-  console.log('📍 Seeding Wilayah master data...');
-  for (const w of MASTER_WILAYAH) {
-    await prisma.wilayah.create({ data: { ...w, provinsi: 'Jawa Barat' } });
-  }
-  const wilayahList = await prisma.wilayah.findMany();
-  const wilayahMap = Object.fromEntries(wilayahList.map(w => [w.nama, w.id]));
-  console.log(`   ✔ ${wilayahList.length} Wilayah records created.\n`);
-
-  // ─── STEP 3: Seed tabel Pengelola ───────────────────────────────────────
-  console.log('🏢 Seeding Pengelola master data...');
-  for (const p of MASTER_PENGELOLA) {
-    await prisma.pengelola.create({ data: p });
-  }
-  const pengelolaList = await prisma.pengelola.findMany();
-  const pengelolaMap = Object.fromEntries(pengelolaList.map(p => [p.nama, p.id]));
-  console.log(`   ✔ ${pengelolaList.length} Pengelola records created.\n`);
-
-  // ─── STEP 4: Baca CSV ───────────────────────────────────────────────────
-  console.log('📄 Reading CSV file...');
+  // 2. Baca file CSV
   const rows = [];
   await new Promise((resolve, reject) => {
-    fs.createReadStream(csvFilePath)
-      .pipe(csv({ separator: ';' }))
-      .on('data', (row) => {
-        const rawLat = (row.Latitude || '').replace(',', '.').trim();
-        const rawLng = (row.Longitude || '').replace(',', '.').trim();
-        const lat = parseFloat(rawLat);
-        const lng = parseFloat(rawLng);
-        if (!isNaN(lat) && !isNaN(lng) && row.Node_ID) {
-          rows.push(row);
-        }
-      })
-      .on('end', () => { console.log(`   ✔ ${rows.length} valid rows read.\n`); resolve(); })
+    fs.createReadStream(csvPath)
+      .pipe(csv())
+      .on('data', (data) => rows.push(data))
+      .on('end', resolve)
       .on('error', reject);
   });
 
-  // ─── STEP 5: Seed tabel FasilitasAir ────────────────────────────────────
-  console.log('💧 Seeding FasilitasAir records...');
-  const chunkSize = 30;
-  let inserted = 0;
+  console.log(`📄 Total baris terbaca dari CSV: ${rows.length}`);
 
-  for (let i = 0; i < rows.length; i += chunkSize) {
-    const chunk = rows.slice(i, i + chunkSize);
-    const data = chunk.map(row => {
-      const wilayahNama = normalizeWilayah(row.Wilayah);
-      const pengelolaNama = normalizePengelola(row.Pengelola);
-      const lat = parseFloat((row.Latitude || '').replace(',', '.').trim());
-      const lng = parseFloat((row.Longitude || '').replace(',', '.').trim());
+  // 3. Kelompokkan data berdasarkan Gunung -> Jalur Via -> Pos
+  const mountainMap = new Map();
 
-      return {
-        no: row.No ? parseInt(row.No, 10) : null,
-        nodeId: (row.Node_ID || '').trim(),
-        wilayahId: wilayahMap[wilayahNama] || wilayahMap['Kota Bandung'],
-        pengelolaId: pengelolaMap[pengelolaNama] || pengelolaMap['Lainnya'],
-        jenisFasilitas: (row.Jenis_Fasilitas || 'Lainnya').trim(),
-        latitude: lat,
-        longitude: lng,
-        statusOperasional: (row.Status_Operasional || 'Beroperasi Normal').trim(),
-        kategoriAirMinum: (row.Kategori_Air_Minum || 'Belum siap minum').trim(),
-        keteranganAirMinum: (row.Keterangan_Air_Minum || '').trim() || null,
-        catatanData: (row.Catatan_Data || '').trim() || null,
-      };
+  for (const row of rows) {
+    const rawGunung = (row.nama_gunung || '').trim();
+    if (!rawGunung) continue;
+
+    const provinsi = (row.provinsi || 'Jawa Tengah').trim();
+    const kabupaten = (row.kabupaten || '').trim();
+    const ketinggian = parseElevation(row.ketinggian);
+    const jalurVia = (row.jalur_via || 'Jalur Utama').trim();
+    const namaPos = (row.nama_pos || 'Pos Pendakian').trim();
+    const lat = parseFloat(row.latitude);
+    const lng = parseFloat(row.longitude);
+
+    if (isNaN(lat) || isNaN(lng)) continue;
+
+    if (!mountainMap.has(rawGunung)) {
+      mountainMap.set(rawGunung, {
+        nama: rawGunung,
+        provinsi,
+        kabupaten,
+        ketinggian,
+        jalurs: new Map()
+      });
+    }
+
+    const gData = mountainMap.get(rawGunung);
+    // Update regency/height if missing
+    if (!gData.kabupaten && kabupaten) gData.kabupaten = kabupaten;
+    if (ketinggian > gData.ketinggian) gData.ketinggian = ketinggian;
+
+    if (!gData.jalurs.has(jalurVia)) {
+      gData.jalurs.set(jalurVia, {
+        jalurVia,
+        provinsi,
+        kabupaten,
+        posList: []
+      });
+    }
+
+    gData.jalurs.get(jalurVia).posList.push({
+      namaPos,
+      lat,
+      lng,
+      adaAir: checkWaterAvailability(namaPos)
     });
-
-    await prisma.fasilitasAir.createMany({ data });
-    inserted += chunk.length;
-    process.stdout.write(`   Progress: ${inserted}/${rows.length} records...\r`);
   }
-  console.log(`\n   ✔ ${inserted} FasilitasAir records created.\n`);
 
-  // ─── STEP 6: Seed contoh RiwayatUjiLab ──────────────────────────────────
-  console.log('🧪 Seeding sample RiwayatUjiLab data...');
-  const siapMinum = await prisma.fasilitasAir.findMany({
-    where: { kategoriAirMinum: { contains: 'Siap minum' } },
-    take: 5
-  });
+  console.log(`🏔️ Total gunung unik: ${mountainMap.size}`);
 
-  for (const f of siapMinum) {
-    await prisma.riwayatUjiLab.create({
+  let totalBasecampsCreated = 0;
+  let totalPosCreated = 0;
+  const existingSlugs = new Set();
+
+  for (const [namaGunung, gInfo] of mountainMap.entries()) {
+    let baseSlug = slugify(namaGunung);
+    if (!baseSlug) baseSlug = 'gunung-' + Math.floor(Math.random() * 10000);
+    let finalSlug = baseSlug;
+    let counter = 1;
+    while (existingSlugs.has(finalSlug)) {
+      finalSlug = `${baseSlug}-${counter++}`;
+    }
+    existingSlugs.add(finalSlug);
+
+    const statusObj = getMountainStatus(namaGunung);
+
+    // Hitung titik representatif puncak (ambil pos terakhir / tertinggi)
+    let peakLat = null;
+    let peakLng = null;
+    let allPosInGunung = [];
+    for (const j of gInfo.jalurs.values()) {
+      allPosInGunung.push(...j.posList);
+    }
+    if (allPosInGunung.length > 0) {
+      const lastPos = allPosInGunung[allPosInGunung.length - 1];
+      peakLat = lastPos.lat;
+      peakLng = lastPos.lng;
+    }
+
+    const createdGunung = await prisma.gunung.create({
       data: {
-        fasilitasId: f.id,
-        tanggalUji: new Date('2024-06-15'),
-        hasilUji: 'LULUS',
-        lembagaUji: 'BBTPPI Kementerian Perindustrian',
-        parameterUji: 'E. Coli, Total Coliform, pH, Kekeruhan',
-        nilaiParameter: 'E.Coli: 0, Coliform: 0, pH: 7.2, Kekeruhan: 0.4 NTU',
-        batasAman: 'E.Coli: 0/100ml, Coliform: 0/100ml, pH: 6.5-8.5, Kekeruhan: <1.5 NTU',
-        catatan: 'Semua parameter memenuhi standar Permenkes No. 492/2010'
+        nama: namaGunung,
+        slug: finalSlug,
+        provinsi: gInfo.provinsi,
+        kabupaten: gInfo.kabupaten || 'Pulau Jawa',
+        ketinggian: gInfo.ketinggian,
+        statusVulkanik: statusObj.statusVulkanik,
+        statusJalur: statusObj.statusJalur,
+        kuotaHarian: statusObj.kuotaHarian,
+        kuotaTersisa: statusObj.kuotaTersisa,
+        cuacaSuhu: Math.floor(Math.random() * 8 + 8), // 8 - 16 °C di dataran tinggi
+        cuacaKondisi: 'Cerah Berawan',
+        latitude: peakLat,
+        longitude: peakLng,
+        deskripsi: `Jalur pendakian resmi ${namaGunung} dengan ketinggian ${gInfo.ketinggian} MDPL di wilayah ${gInfo.kabupaten}, ${gInfo.provinsi}.`,
       }
     });
+
+    // Buat Basecamp dan Pos
+    for (const [jalurName, jInfo] of gInfo.jalurs.entries()) {
+      const posArr = jInfo.posList;
+      if (posArr.length === 0) continue;
+
+      // Cari pos yang memiliki nama Basecamp atau gunakan pos pertama
+      const bcCandidate = posArr.find(p => p.namaPos.toLowerCase().includes('basecamp')) || posArr[0];
+      const bcLat = bcCandidate.lat;
+      const bcLng = bcCandidate.lng;
+      const bcElevation = Math.max(500, Math.round(gInfo.ketinggian * 0.45));
+
+      const createdBasecamp = await prisma.basecamp.create({
+        data: {
+          gunungId: createdGunung.id,
+          nama: `Basecamp ${jalurName}`,
+          jalurVia: jalurName,
+          totalPos: posArr.length,
+          status: statusObj.statusJalur,
+          latitude: bcLat,
+          longitude: bcLng,
+          elevasi: bcElevation,
+          kontak: '0812-3456-' + Math.floor(1000 + Math.random() * 9000),
+          simaksiInfo: 'Registrasi Online & On-the-spot di pos registrasi resmi.',
+          sumber: 'Direktori Jalur Pendakian Jawa Timur, Jateng, Jabar & DIY'
+        }
+      });
+      totalBasecampsCreated++;
+
+      // Masukkan PosGunung
+      const elevStep = Math.round((gInfo.ketinggian - bcElevation) / (posArr.length || 1));
+      for (let idx = 0; idx < posArr.length; idx++) {
+        const p = posArr[idx];
+        const estElev = Math.min(gInfo.ketinggian, bcElevation + (idx + 1) * elevStep);
+
+        await prisma.posGunung.create({
+          data: {
+            basecampId: createdBasecamp.id,
+            namaPos: p.namaPos,
+            urutan: idx + 1,
+            latitude: p.lat,
+            longitude: p.lng,
+            elevasi: estElev,
+            adaAir: p.adaAir,
+            areaCamp: idx < posArr.length - 1, // semua pos kecuali puncak punya area camp
+            keterangan: p.adaAir ? 'Tersedia sumber mata air untuk pendaki' : 'Tempat istirahat & shelter darurat'
+          }
+        });
+        totalPosCreated++;
+      }
+    }
   }
-  console.log(`   ✔ ${siapMinum.length} sample uji lab records created.\n`);
 
-  // ─── STEP 7: Ringkasan ───────────────────────────────────────────────────
-  const summary = {
-    wilayah: await prisma.wilayah.count(),
-    pengelola: await prisma.pengelola.count(),
-    fasilitasAir: await prisma.fasilitasAir.count(),
-    riwayatUjiLab: await prisma.riwayatUjiLab.count(),
-    logPembaruan: await prisma.logPembaruan.count(),
-  };
-
-  console.log('═══════════════════════════════════════════');
-  console.log('✅ Seeding COMPLETE! Database Summary:');
-  console.log('═══════════════════════════════════════════');
-  console.log(`   📍 Wilayah      : ${summary.wilayah} records`);
-  console.log(`   🏢 Pengelola    : ${summary.pengelola} records`);
-  console.log(`   💧 FasilitasAir : ${summary.fasilitasAir} records`);
-  console.log(`   🧪 UjiLab       : ${summary.riwayatUjiLab} records`);
-  console.log(`   📝 Log          : ${summary.logPembaruan} records`);
-  console.log('═══════════════════════════════════════════');
+  console.log(`\n🎉 SEEDING SELESAI DENGAN SUKSES!`);
+  console.log(`⛰️  Total Gunung:    ${mountainMap.size}`);
+  console.log(`🏕️  Total Basecamp:  ${totalBasecampsCreated}`);
+  console.log(`📍 Total Pos Gunung: ${totalPosCreated}`);
 }
 
 seed()
-  .catch((e) => {
-    console.error('\n❌ Seeding error:', e.message);
+  .catch((err) => {
+    console.error('❌ Error saat seeding:', err);
     process.exit(1);
   })
   .finally(async () => {

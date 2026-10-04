@@ -27,10 +27,12 @@ app.use((req, res) => {
 // Start Server
 const server = app.listen(PORT, () => {
   console.log(`=======================================================`);
-  console.log(`💧 Web Pemetaan Sumber Air Bersih & Siap Minum Bandung Raya`);
+  console.log(`🏔️ JawaRidge - Sistem Geospasial Pemetaan Jalur Basecamp & Pos Gunung`);
   console.log(`🚀 Server aktif di: http://localhost:${PORT}`);
-  console.log(`📡 API endpoint:   http://localhost:${PORT}/api/fasilitas`);
-  console.log(`📊 API statistik:  http://localhost:${PORT}/api/stats`);
+  console.log(`📡 API Gunung:    http://localhost:${PORT}/api/gunung`);
+  console.log(`⛺ API Basecamp:  http://localhost:${PORT}/api/basecamp`);
+  console.log(`📍 API Pos:       http://localhost:${PORT}/api/pos`);
+  console.log(`📊 API Statistik: http://localhost:${PORT}/api/stats`);
   console.log(`=======================================================`);
 });
 
