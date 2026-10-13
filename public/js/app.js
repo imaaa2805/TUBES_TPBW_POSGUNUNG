@@ -25,6 +25,12 @@ let searchQuery = '';
 
 let currentUserCoords = null;
 let isPickingCoordinates = false;
+let activeCoordTarget = null;
+let isDragMarkerMode = false;
+let editingWaypoints = [];
+let markerInstances = {};
+let activeTrailPolyline = null;
+let activeTrailCasing = null;
 
 // Paired Pos Table State
 let showAllPosMode = false;
@@ -110,15 +116,56 @@ function initMap() {
     }
 
     if (isPickingCoordinates) {
-      const latInput = document.getElementById('form-bc-lat');
-      const lngInput = document.getElementById('form-bc-lng');
-      if (latInput && lngInput) {
-        latInput.value = lat;
-        lngInput.value = lng;
-        isPickingCoordinates = false;
-        showToast(`Koordinat dipilih: ${lat}, ${lng}`, 'success');
-        openBasecampModal();
+      if (activeCoordTarget === 'basecamp_modal') {
+        const latInput = document.getElementById('form-bc-lat');
+        const lngInput = document.getElementById('form-bc-lng');
+        if (latInput && lngInput) {
+          latInput.value = lat;
+          lngInput.value = lng;
+          openBasecampModal();
+          showToast(`Koordinat Basecamp dipilih: ${lat}, ${lng}`, 'success');
+        }
+      } else if (activeCoordTarget === 'pos_modal') {
+        const latInput = document.getElementById('form-pos-lat');
+        const lngInput = document.getElementById('form-pos-lng');
+        if (latInput && lngInput) {
+          latInput.value = lat;
+          lngInput.value = lng;
+          document.getElementById('pos-modal')?.classList.remove('hidden');
+          showToast(`Koordinat Pos dipilih: ${lat}, ${lng}`, 'success');
+        }
+      } else if (activeCoordTarget === 'gunung_modal') {
+        const latInput = document.getElementById('form-gunung-lat');
+        const lngInput = document.getElementById('form-gunung-lng');
+        if (latInput && lngInput) {
+          latInput.value = lat;
+          lngInput.value = lng;
+          document.getElementById('gunung-modal')?.classList.remove('hidden');
+          showToast(`Koordinat Puncak dipilih: ${lat}, ${lng}`, 'success');
+        }
+      } else if (activeCoordTarget && activeCoordTarget.type && activeCoordTarget.id) {
+        const rowLat = document.getElementById(`coord-lat-${activeCoordTarget.type}-${activeCoordTarget.id}`);
+        const rowLng = document.getElementById(`coord-lng-${activeCoordTarget.type}-${activeCoordTarget.id}`);
+        if (rowLat && rowLng) {
+          rowLat.value = lat;
+          rowLng.value = lng;
+          onCoordInputChange(activeCoordTarget.type, activeCoordTarget.id);
+          document.getElementById('coord-editor-modal')?.classList.remove('hidden');
+          showToast(`Koordinat ${activeCoordTarget.name} diperbarui: ${lat}, ${lng}`, 'success');
+        }
+      } else {
+        // Fallback default basecamp modal
+        const latInput = document.getElementById('form-bc-lat');
+        const lngInput = document.getElementById('form-bc-lng');
+        if (latInput && lngInput) {
+          latInput.value = lat;
+          lngInput.value = lng;
+          openBasecampModal();
+          showToast(`Koordinat dipilih: ${lat}, ${lng}`, 'success');
+        }
       }
+      activeCoordTarget = null;
+      isPickingCoordinates = false;
     }
   });
 
@@ -735,18 +782,34 @@ function calculateTrailSegments(waypoints) {
  */
 function drawMountainTrail(mountain, basecamp) {
   trailMarkersGroup.clearLayers();
+  markerInstances = {};
 
   if (!basecamp) return;
 
   const waypoints = getExpeditionWaypoints(mountain, basecamp);
   if (waypoints.length === 0) return;
 
+  // Initialize editingWaypoints state for coordinate editor & live dragging
+  editingWaypoints = waypoints.map(w => ({
+    id: w.id,
+    rawId: w.type === 'basecamp' ? basecamp.id : (w.type === 'summit' ? mountain.id : w.id),
+    name: w.name,
+    type: w.type,
+    urutan: w.urutan,
+    lat: w.lat,
+    lng: w.lng,
+    elev: w.elev,
+    originalLat: w.lat,
+    originalLng: w.lng,
+    keterangan: w.keterangan
+  }));
+
   const summary = calculateTrailSegments(waypoints);
   const polyCoords = waypoints.map(w => [w.lat, w.lng]);
 
   if (polyCoords.length >= 2) {
     // 1. White casing polyline underneath for high contrast
-    L.polyline(polyCoords, {
+    activeTrailCasing = L.polyline(polyCoords, {
       color: '#ffffff',
       weight: 8,
       opacity: 0.9,
@@ -755,7 +818,7 @@ function drawMountainTrail(mountain, basecamp) {
     }).addTo(trailMarkersGroup);
 
     // 2. High-visibility emerald hiking trail with marching dashes
-    const trailPolyline = L.polyline(polyCoords, {
+    activeTrailPolyline = L.polyline(polyCoords, {
       color: '#059669',
       weight: 5,
       opacity: 0.95,
@@ -774,8 +837,8 @@ function drawMountainTrail(mountain, basecamp) {
         <div class="text-[10px] text-on-surface-variant font-normal mt-0.5 italic">Klik jalur untuk buka panduan langkah rute</div>
       </div>
     `;
-    trailPolyline.bindTooltip(tooltipHtml, { sticky: true, className: 'trail-tooltip' });
-    trailPolyline.on('click', () => {
+    activeTrailPolyline.bindTooltip(tooltipHtml, { sticky: true, className: 'trail-tooltip' });
+    activeTrailPolyline.on('click', () => {
       openArahRutePendakianModal();
     });
 
@@ -839,7 +902,40 @@ function drawMountainTrail(mountain, basecamp) {
       iconAnchor: [70, size + 20]
     });
 
-    const marker = L.marker([wp.lat, wp.lng], { icon: posIcon }).addTo(trailMarkersGroup);
+    const marker = L.marker([wp.lat, wp.lng], { 
+      icon: posIcon,
+      draggable: isDragMarkerMode 
+    }).addTo(trailMarkersGroup);
+
+    markerInstances[wp.id] = marker;
+
+    // Real-time drag event listener: updates polyline and KM recalculation immediately
+    marker.on('drag', (e) => {
+      const { lat, lng } = e.target.getLatLng();
+      const newLat = parseFloat(lat.toFixed(6));
+      const newLng = parseFloat(lng.toFixed(6));
+
+      const curWp = editingWaypoints.find(w => w.id === wp.id);
+      if (curWp) {
+        curWp.lat = newLat;
+        curWp.lng = newLng;
+      }
+
+      const rawId = wp.type === 'basecamp' ? basecamp.id : (wp.type === 'summit' ? mountain.id : wp.id);
+      const rowLat = document.getElementById(`coord-lat-${wp.type}-${rawId}`);
+      const rowLng = document.getElementById(`coord-lng-${wp.type}-${rawId}`);
+      if (rowLat) rowLat.value = newLat;
+      if (rowLng) rowLng.value = newLng;
+
+      updateLivePolyline();
+      updateCoordEditorDistance();
+    });
+
+    marker.on('dragend', (e) => {
+      const { lat, lng } = e.target.getLatLng();
+      const distFormatted = document.getElementById('coord-editor-live-dist')?.innerText || '';
+      showToast(`📍 Posisi ${wp.name} digeser: ${lat.toFixed(6)}, ${lng.toFixed(6)}${distFormatted ? ' · Jarak: ' + distFormatted : ''}`, 'info');
+    });
 
     // Marker Popup
     const isBc = wp.type === 'basecamp';
@@ -871,7 +967,12 @@ function drawMountainTrail(mountain, basecamp) {
           <button onclick="openArahRutePendakianModal()" class="text-secondary hover:underline font-headline font-bold text-[11px] flex items-center gap-0.5">
             <span class="material-symbols-outlined text-[14px]">alt_route</span> Panduan Rute
           </button>
-          ${wp.type === 'pos' ? `<button onclick="openPosModal(${wp.id}, ${wp.basecampId})" class="px-2 py-0.5 rounded bg-surface-container hover:bg-primary hover:text-white text-primary text-[10px] font-bold transition-colors">Rename Pos</button>` : ''}
+          <div class="flex items-center gap-1">
+            <button onclick="openCoordEditorModal()" class="px-2 py-0.5 rounded bg-surface-container hover:bg-secondary hover:text-white text-secondary text-[10px] font-bold transition-colors flex items-center gap-0.5" title="Edit Lat/Lng jalur">
+              <span class="material-symbols-outlined text-[12px]">edit_location_alt</span> Edit Lat/Lng
+            </button>
+            ${wp.type === 'pos' ? `<button onclick="openPosModal(${wp.id}, ${wp.basecampId})" class="px-2 py-0.5 rounded bg-surface-container hover:bg-primary hover:text-white text-primary text-[10px] font-bold transition-colors">Rename Pos</button>` : ''}
+          </div>
         </div>
       </div>
     `;
@@ -997,6 +1098,347 @@ function updateMapTrailSummary(mountain, basecamp) {
 function closeMapTrailSummary() {
   const banner = document.getElementById('map-trail-summary');
   if (banner) banner.classList.add('hidden');
+}
+
+/**
+ * 8B. Coordinate Editor & Live Interactive Dragging
+ * Memungkinkan editing Latitude & Longitude titik jalur (Basecamp, Pos, Puncak)
+ * langsung dari web tanpa ubah Excel manual, dengan kalkulasi live jarak KM rute.
+ */
+function openCoordEditorModal() {
+  const m = selectedMountain || allMountains[0];
+  const bc = selectedBasecamp || m?.basecamps[0];
+
+  if (!m || !bc) {
+    showToast('Pilih gunung dan jalur via terlebih dahulu', 'warning');
+    return;
+  }
+
+  const badge = document.getElementById('coord-editor-mountain-badge');
+  if (badge) {
+    badge.innerText = `${m.nama} · Via ${bc.jalurVia}`;
+  }
+
+  // Pastikan editingWaypoints terisi dari lintasan aktif
+  if (!editingWaypoints || editingWaypoints.length === 0) {
+    const waypoints = getExpeditionWaypoints(m, bc);
+    editingWaypoints = waypoints.map(w => ({
+      id: w.id,
+      rawId: w.type === 'basecamp' ? bc.id : (w.type === 'summit' ? m.id : w.id),
+      name: w.name,
+      type: w.type,
+      urutan: w.urutan,
+      lat: w.lat,
+      lng: w.lng,
+      elev: w.elev,
+      originalLat: w.lat,
+      originalLng: w.lng,
+      keterangan: w.keterangan
+    }));
+  }
+
+  renderCoordEditorTable();
+  updateCoordEditorDistance();
+
+  // Sinkronkan toggle checkbox mode geser pin
+  const toggle = document.getElementById('toggle-drag-markers');
+  if (toggle) toggle.checked = isDragMarkerMode;
+
+  document.getElementById('coord-editor-modal')?.classList.remove('hidden');
+}
+
+function closeCoordEditorModal() {
+  document.getElementById('coord-editor-modal')?.classList.add('hidden');
+  isPickingCoordinates = false;
+  activeCoordTarget = null;
+}
+
+function renderCoordEditorTable() {
+  const tbody = document.getElementById('coord-editor-tbody');
+  if (!tbody || !editingWaypoints) return;
+
+  tbody.innerHTML = editingWaypoints.map((wp, idx) => {
+    let typeBadge = '';
+    if (wp.type === 'basecamp') {
+      typeBadge = `<span class="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-headline font-bold text-[10px]">🚩 Basecamp</span>`;
+    } else if (wp.type === 'summit') {
+      typeBadge = `<span class="px-2 py-0.5 rounded-full bg-red-500/15 text-red-700 dark:text-red-300 font-headline font-bold text-[10px]">⛰️ Puncak</span>`;
+    } else {
+      typeBadge = `<span class="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-headline font-bold text-[10px]">Pos ${wp.urutan || idx}</span>`;
+    }
+
+    const safeName = (wp.name || '').replace(/'/g, "\\'");
+
+    return `
+      <tr class="hover:bg-surface-container-low transition-colors">
+        <td class="py-2.5 px-1">${typeBadge}</td>
+        <td class="py-2.5 px-2">
+          <div class="font-headline font-bold text-on-surface text-xs">${wp.name}</div>
+          <div class="text-[10px] text-on-surface-variant font-mono">${wp.keterangan || (wp.type === 'summit' ? 'Puncak Tertinggi' : 'Titik Jalur')}</div>
+        </td>
+        <td class="py-2.5 px-2 font-mono text-on-surface-variant text-xs">
+          ${wp.elev ? wp.elev.toLocaleString('id-ID') + ' m' : '-'}
+        </td>
+        <td class="py-2.5 px-2">
+          <input 
+            id="coord-lat-${wp.type}-${wp.rawId}" 
+            type="number" 
+            step="any" 
+            value="${wp.lat}" 
+            class="w-full bg-surface-container-low border border-surface-container rounded-lg p-1.5 font-mono text-xs text-on-surface focus:outline-none focus:border-primary font-semibold"
+            oninput="onCoordInputChange('${wp.type}', '${wp.rawId}')"
+          >
+        </td>
+        <td class="py-2.5 px-2">
+          <input 
+            id="coord-lng-${wp.type}-${wp.rawId}" 
+            type="number" 
+            step="any" 
+            value="${wp.lng}" 
+            class="w-full bg-surface-container-low border border-surface-container rounded-lg p-1.5 font-mono text-xs text-on-surface focus:outline-none focus:border-primary font-semibold"
+            oninput="onCoordInputChange('${wp.type}', '${wp.rawId}')"
+          >
+        </td>
+        <td class="py-2.5 px-1 text-right">
+          <button 
+            type="button" 
+            onclick="pickCoordinateForPoint('${wp.type}', '${wp.rawId}', '${safeName}')" 
+            class="px-2 py-1 rounded-lg bg-surface-container-high hover:bg-secondary hover:text-white text-secondary font-headline font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
+            title="Klik peta untuk ambil koordinat titik ini"
+          >
+            <span class="material-symbols-outlined text-[13px]">my_location</span>
+            <span>Peta</span>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function onCoordInputChange(type, id) {
+  const rowLat = document.getElementById(`coord-lat-${type}-${id}`);
+  const rowLng = document.getElementById(`coord-lng-${type}-${id}`);
+  if (!rowLat || !rowLng) return;
+
+  const latVal = parseFloat(rowLat.value);
+  const lngVal = parseFloat(rowLng.value);
+  if (isNaN(latVal) || isNaN(lngVal)) return;
+
+  const target = editingWaypoints.find(w => w.type === type && String(w.rawId) === String(id));
+  if (target) {
+    target.lat = latVal;
+    target.lng = lngVal;
+
+    // Update pin marker di peta jika ada
+    const marker = markerInstances[target.id];
+    if (marker) {
+      marker.setLatLng([latVal, lngVal]);
+    }
+
+    updateLivePolyline();
+    updateCoordEditorDistance();
+  }
+}
+
+function updateLivePolyline() {
+  if (!editingWaypoints || editingWaypoints.length < 2) return;
+  const pts = editingWaypoints.map(w => [w.lat, w.lng]);
+  if (activeTrailCasing) activeTrailCasing.setLatLngs(pts);
+  if (activeTrailPolyline) activeTrailPolyline.setLatLngs(pts);
+}
+
+function updateCoordEditorDistance() {
+  if (!editingWaypoints || editingWaypoints.length === 0) return;
+  const summary = calculateTrailSegments(editingWaypoints);
+
+  const liveDistEl = document.getElementById('coord-editor-live-dist');
+  if (liveDistEl) liveDistEl.innerText = summary.totalDistanceFormatted;
+
+  const liveCountEl = document.getElementById('coord-editor-point-count');
+  if (liveCountEl) liveCountEl.innerText = `${editingWaypoints.length} Titik`;
+
+  // Update floating banner jarak di peta
+  const mapDistEl = document.getElementById('map-trail-dist');
+  if (mapDistEl) mapDistEl.innerText = summary.totalDistanceFormatted;
+
+  // Update inspector panel jarak & elevasi gain
+  const metricDistEl = document.getElementById('metric-trail-distance');
+  if (metricDistEl) metricDistEl.innerText = summary.totalDistanceFormatted;
+
+  const metricGainEl = document.getElementById('metric-gain-val');
+  if (metricGainEl) metricGainEl.innerText = summary.totalGainFormatted;
+
+  if (activeTrailPolyline) {
+    const m = selectedMountain;
+    const bc = selectedBasecamp;
+    if (m && bc) {
+      const tooltipHtml = `
+        <div class="p-1.5 text-xs font-headline font-bold text-on-surface">
+          <div class="text-primary font-bold">🏔️ ${m.nama} · Via ${bc.jalurVia}</div>
+          <div class="text-on-surface mt-0.5 font-mono">🛣️ Jarak Jalur: <strong class="text-primary">${summary.totalDistanceFormatted}</strong> (BC ➔ Puncak)</div>
+          <div class="text-secondary font-mono">📍 Jumlah Pos: <strong class="text-secondary">${bc.pos ? bc.pos.length : 0} Pos</strong> Pendakian</div>
+          <div class="text-[10px] text-on-surface-variant font-normal mt-0.5 italic">Klik jalur untuk buka panduan langkah rute</div>
+        </div>
+      `;
+      activeTrailPolyline.setTooltipContent(tooltipHtml);
+    }
+  }
+}
+
+function toggleDragMarkerMode(enable) {
+  isDragMarkerMode = !!enable;
+
+  // Sinkronkan checkbox state
+  const checkbox = document.getElementById('toggle-drag-markers');
+  if (checkbox && checkbox.checked !== isDragMarkerMode) {
+    checkbox.checked = isDragMarkerMode;
+  }
+
+  // Aktifkan / nonaktifkan dragging pada semua pin di peta
+  Object.values(markerInstances).forEach(marker => {
+    if (marker && marker.dragging) {
+      if (isDragMarkerMode) {
+        marker.dragging.enable();
+      } else {
+        marker.dragging.disable();
+      }
+    }
+  });
+
+  if (isDragMarkerMode) {
+    showToast('Mode Geser Pin AKTIF: Anda dapat menggeser pin di peta untuk melihat jarak KM berubah real-time!', 'info');
+  } else {
+    showToast('Mode Geser Pin DINONAKTIFKAN.', 'info');
+  }
+}
+
+function pickCoordinateForPoint(type, id, name) {
+  closeCoordEditorModal();
+  isPickingCoordinates = true;
+  activeCoordTarget = { type, id: String(id), name };
+  switchView('map');
+  showToast(`Silakan KLIK pada peta untuk menentukan koordinat ${name}`, 'info');
+}
+
+function resetCoordEditor() {
+  if (!editingWaypoints || editingWaypoints.length === 0) return;
+
+  editingWaypoints.forEach(wp => {
+    wp.lat = wp.originalLat;
+    wp.lng = wp.originalLng;
+
+    const rowLat = document.getElementById(`coord-lat-${wp.type}-${wp.rawId}`);
+    const rowLng = document.getElementById(`coord-lng-${wp.type}-${wp.rawId}`);
+    if (rowLat) rowLat.value = wp.originalLat;
+    if (rowLng) rowLng.value = wp.originalLng;
+
+    const marker = markerInstances[wp.id];
+    if (marker) {
+      marker.setLatLng([wp.originalLat, wp.originalLng]);
+    }
+  });
+
+  updateLivePolyline();
+  updateCoordEditorDistance();
+  showToast('Koordinat dikembalikan ke nilai semula.', 'info');
+}
+
+async function saveCoordinatesBatch() {
+  const m = selectedMountain;
+  const bc = selectedBasecamp;
+  if (!m || !bc || !editingWaypoints || editingWaypoints.length === 0) {
+    showToast('Data jalur belum siap untuk disimpan', 'error');
+    return;
+  }
+
+  const bcWp = editingWaypoints.find(w => w.type === 'basecamp');
+  const summitWp = editingWaypoints.find(w => w.type === 'summit');
+  const posWps = editingWaypoints.filter(w => w.type === 'pos');
+
+  const payload = {
+    pos: posWps.map(p => ({
+      id: parseInt(p.rawId, 10),
+      latitude: parseFloat(p.lat),
+      longitude: parseFloat(p.lng)
+    }))
+  };
+
+  if (bcWp) {
+    payload.basecamp = {
+      id: parseInt(bcWp.rawId, 10),
+      latitude: parseFloat(bcWp.lat),
+      longitude: parseFloat(bcWp.lng)
+    };
+  }
+
+  if (summitWp) {
+    payload.gunung = {
+      id: parseInt(summitWp.rawId, 10),
+      latitude: parseFloat(summitWp.lat),
+      longitude: parseFloat(summitWp.lng)
+    };
+  }
+
+  try {
+    const res = await fetch('/api/coordinates/batch', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const json = await res.json();
+    if (json.success) {
+      showToast(json.message || 'Koordinat berhasil disimpan ke database!', 'success');
+
+      // Update in-memory models
+      if (bcWp && bc) {
+        bc.latitude = bcWp.lat;
+        bc.longitude = bcWp.lng;
+        const foundBc = allBasecamps.find(b => b.id === bc.id);
+        if (foundBc) {
+          foundBc.latitude = bcWp.lat;
+          foundBc.longitude = bcWp.lng;
+        }
+      }
+
+      if (summitWp && m) {
+        m.latitude = summitWp.lat;
+        m.longitude = summitWp.lng;
+        const foundM = allMountains.find(item => item.id === m.id);
+        if (foundM) {
+          foundM.latitude = summitWp.lat;
+          foundM.longitude = summitWp.lng;
+        }
+      }
+
+      posWps.forEach(p => {
+        const foundPos = bc.pos?.find(item => item.id === parseInt(p.rawId, 10));
+        if (foundPos) {
+          foundPos.latitude = p.lat;
+          foundPos.longitude = p.lng;
+        }
+      });
+
+      // Update originalLat & originalLng
+      editingWaypoints.forEach(w => {
+        w.originalLat = w.lat;
+        w.originalLng = w.lng;
+      });
+
+      closeCoordEditorModal();
+
+      // Redraw trail and update UI
+      drawMountainTrail(m, bc);
+      updateInspectorPanel(m, bc);
+      updateMapTrailSummary(m, bc);
+      renderMountainPins();
+      renderMountainCards();
+    } else {
+      showToast(json.message || 'Gagal menyimpan koordinat', 'error');
+    }
+  } catch (err) {
+    showToast('Terjadi kesalahan koneksi: ' + err.message, 'error');
+  }
 }
 
 /**
@@ -1490,6 +1932,7 @@ function closeBasecampModal() {
 function enableMapCoordPicker() {
   closeBasecampModal();
   isPickingCoordinates = true;
+  activeCoordTarget = 'basecamp_modal';
   switchView('map');
   showToast('Silakan KLIK pada peta untuk menentukan titik koordinat Basecamp', 'info');
 }
@@ -1599,6 +2042,14 @@ function openGunungModal(id = null) {
 
 function closeGunungModal() {
   document.getElementById('gunung-modal')?.classList.add('hidden');
+}
+
+function enableGunungCoordPicker() {
+  closeGunungModal();
+  isPickingCoordinates = true;
+  activeCoordTarget = 'gunung_modal';
+  switchView('map');
+  showToast('Silakan KLIK pada peta untuk menentukan koordinat Puncak Gunung ini', 'info');
 }
 
 async function submitGunungForm(e) {
@@ -1750,6 +2201,14 @@ function openPosModal(posId = null, basecampId = null) {
 
 function closePosModal() {
   document.getElementById('pos-modal')?.classList.add('hidden');
+}
+
+function enablePosCoordPicker() {
+  closePosModal();
+  isPickingCoordinates = true;
+  activeCoordTarget = 'pos_modal';
+  switchView('map');
+  showToast('Silakan KLIK pada peta untuk menentukan koordinat Pos ini', 'info');
 }
 
 async function submitPosForm(e) {

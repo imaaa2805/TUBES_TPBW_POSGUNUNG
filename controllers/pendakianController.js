@@ -903,6 +903,64 @@ ${gpxPoints.join('\n')}
   }
 };
 
+// ─── 7. BATCH UPDATE KOORDINAT TITIK JALUR (BASECAMP, POS, PUNCAK) ───
+const updateCoordinatesBatch = async (req, res) => {
+  try {
+    const { basecamp, pos = [], gunung } = req.body;
+    const results = { posUpdated: 0 };
+
+    // 1. Update Basecamp Coordinates
+    if (basecamp && basecamp.id && basecamp.latitude !== undefined && basecamp.longitude !== undefined) {
+      const bLat = parseFloat(basecamp.latitude);
+      const bLng = parseFloat(basecamp.longitude);
+      if (!isNaN(bLat) && !isNaN(bLng)) {
+        results.basecamp = await prisma.basecamp.update({
+          where: { id: parseInt(basecamp.id, 10) },
+          data: { latitude: bLat, longitude: bLng }
+        });
+      }
+    }
+
+    // 2. Update Gunung (Puncak) Coordinates
+    if (gunung && gunung.id && gunung.latitude !== undefined && gunung.longitude !== undefined) {
+      const gLat = parseFloat(gunung.latitude);
+      const gLng = parseFloat(gunung.longitude);
+      if (!isNaN(gLat) && !isNaN(gLng)) {
+        results.gunung = await prisma.gunung.update({
+          where: { id: parseInt(gunung.id, 10) },
+          data: { latitude: gLat, longitude: gLng }
+        });
+      }
+    }
+
+    // 3. Update Pos List Coordinates
+    if (Array.isArray(pos)) {
+      for (const p of pos) {
+        if (p.id && p.latitude !== undefined && p.longitude !== undefined) {
+          const pLat = parseFloat(p.latitude);
+          const pLng = parseFloat(p.longitude);
+          if (!isNaN(pLat) && !isNaN(pLng)) {
+            await prisma.posGunung.update({
+              where: { id: parseInt(p.id, 10) },
+              data: { latitude: pLat, longitude: pLng }
+            });
+            results.posUpdated++;
+          }
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Koordinat titik jalur (Basecamp, Pos, Puncak) berhasil diperbarui di database!',
+      data: results
+    });
+  } catch (error) {
+    console.error('Error batch updating coordinates:', error);
+    res.status(500).json({ success: false, message: 'Gagal memperbarui koordinat', error: error.message });
+  }
+};
+
 function slugify(text) {
   return text.toString().toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\w\-]+/g, '');
 }
@@ -924,5 +982,6 @@ module.exports = {
   updatePos,
   deletePos,
   getRouteNavigation,
-  exportGpx
+  exportGpx,
+  updateCoordinatesBatch
 };
