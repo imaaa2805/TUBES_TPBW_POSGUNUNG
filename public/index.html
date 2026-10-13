@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta content="width=device-width, initial-scale=1.0" name="viewport">
-  <title>JawaRidge - Pemetaan Jalur Basecamp & Pos Gunung Pulau Jawa</title>
+  <title>KANIMAP - Pemetaan Jalur Basecamp & Pos Gunung Pulau Jawa</title>
   
   <!-- Google Fonts: Space Grotesk & Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -94,7 +94,7 @@
           <span class="material-symbols-outlined text-[24px]">terrain</span>
         </div>
         <div class="flex flex-col">
-          <span class="font-headline font-bold text-lg uppercase tracking-tight text-primary leading-none">JawaRidge</span>
+          <span class="font-headline font-bold text-lg uppercase tracking-tight text-primary leading-none">KANIMAP</span>
           <span class="font-headline text-[11px] uppercase tracking-widest text-on-surface-variant font-semibold">Sistem Ekspedisi Geospasial</span>
         </div>
       </div>
@@ -113,27 +113,10 @@
           <span class="material-symbols-outlined text-[18px]">holiday_village</span>
           <span>Direktori Basecamp</span>
         </button>
-        <button id="nav-btn-simaksi" onclick="switchView('simaksi')" class="nav-tab px-4 py-2 text-xs font-headline font-semibold rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-[18px]">verified_user</span>
-          <span>SIMAKSI & SOP</span>
-        </button>
-        <button id="nav-btn-cuaca" onclick="switchView('cuaca')" class="nav-tab px-4 py-2 text-xs font-headline font-semibold rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-[18px]">cloud</span>
-          <span>Cuaca & Vulkanik</span>
-        </button>
       </nav>
 
-      <!-- Right Action Bar (PVMBG Pill, CRUD Action, Bell, Profile) - Single Search is in Sidebar as requested -->
+      <!-- Right Action Bar (Live Tracking, CRUD Action, Bell, Profile) -->
       <div class="flex items-center gap-3 shrink-0">
-        
-        <!-- PVMBG Realtime Telemetry Indicator -->
-        <div class="flex items-center gap-1.5 bg-surface-container-lowest px-3 py-1.5 rounded-xl border border-surface-container shadow-sm">
-          <span class="flex h-2.5 w-2.5 relative">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary-container opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-secondary"></span>
-          </span>
-          <span class="font-headline text-[11px] font-bold uppercase tracking-wider text-secondary hidden sm:inline">PVMBG Aktif</span>
-        </div>
 
         <!-- Live Tracking GPS Button -->
         <button id="topbar-live-track-btn" onclick="toggleLiveTrackingHUD()" class="flex items-center gap-1.5 bg-surface-container-lowest hover:bg-surface-container-high text-primary text-xs font-headline font-bold px-3 py-2 rounded-xl transition-all shadow-sm border border-surface-container active:scale-95" title="Buka Kontrol GPS Live Tracking">
@@ -165,7 +148,7 @@
 
         <!-- User / Ranger Avatar -->
         <div class="w-9 h-9 rounded-xl bg-primary-container flex items-center justify-center text-on-primary font-headline font-bold text-xs shadow-sm" title="Petugas Geospasial Pulau Jawa">
-          <span>JR</span>
+          <span>KM</span>
         </div>
 
       </div>
@@ -341,6 +324,49 @@
           <!-- Leaflet Interactive Map Container -->
           <div id="map" class="w-full h-full z-0 relative"></div>
 
+          <!-- FLOATING TRAIL VISUALIZATION SUMMARY OVERLAY (BC - PUNCAK) -->
+          <div id="map-trail-summary" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-30 max-w-[95%] sm:max-w-2xl bg-surface-container-lowest/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-primary/20 p-3 sm:px-4 sm:py-3 transition-all duration-300 pointer-events-auto">
+            <div class="flex items-center justify-between gap-3 sm:gap-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-primary text-on-primary flex items-center justify-center shrink-0 shadow-sm">
+                  <span class="material-symbols-outlined text-[24px]">alt_route</span>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span id="map-trail-title" class="font-headline font-bold text-xs sm:text-sm text-primary tracking-tight">Gunung Lawu · Via Candi Cetho</span>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary font-headline text-[10px] font-bold">
+                      <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                      VISUALISASI BC ➔ PUNCAK
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-2 sm:gap-3 text-xs mt-1 flex-wrap">
+                    <div class="flex items-center gap-1 font-headline font-bold text-on-surface bg-surface-container-low px-2 py-0.5 rounded-lg border border-surface-container">
+                      <span class="material-symbols-outlined text-[15px] text-primary">straighten</span>
+                      <span>Jarak: <strong id="map-trail-dist" class="text-primary font-mono font-bold">7.31 KM</strong></span>
+                    </div>
+                    <div class="flex items-center gap-1 font-headline font-bold text-on-surface bg-surface-container-low px-2 py-0.5 rounded-lg border border-surface-container">
+                      <span class="material-symbols-outlined text-[15px] text-secondary">flag</span>
+                      <span>Jumlah: <strong id="map-trail-pos" class="text-secondary font-mono font-bold">12 Pos</strong></span>
+                    </div>
+                    <div class="hidden sm:flex items-center gap-1 font-headline text-on-surface-variant text-[11px]">
+                      <span class="material-symbols-outlined text-[14px]">terrain</span>
+                      <span id="map-trail-gain">1.450m ➔ 3.265m (+1.815m)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button onclick="openArahRutePendakianModal()" class="px-3 py-1.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary text-xs font-headline font-bold flex items-center gap-1 transition-all shadow-sm active:scale-95" title="Lihat Urutan Pos dan Langkah Rute">
+                  <span class="material-symbols-outlined text-[16px]">format_list_numbered</span>
+                  <span class="hidden md:inline">Urutan Pos</span>
+                </button>
+                <button onclick="closeMapTrailSummary()" class="p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors" title="Sembunyikan Ringkasan">
+                  <span class="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- FLOATING LIVE TRACKING HUD OVERLAY -->
           <div id="live-tracking-hud" class="hidden absolute top-20 right-4 z-40 w-80 md:w-96 bg-surface-container-lowest/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-surface-container overflow-hidden transition-all duration-300">
             <!-- HUD Header -->
@@ -465,7 +491,7 @@
                 </div>
                 <div>
                   <div class="flex items-center gap-2">
-                    <span id="inspector-type" class="font-headline text-[10px] uppercase tracking-widest text-primary font-bold">STRATOVOLCANO TIPE-A</span>
+                    <span id="inspector-type" class="font-headline text-[10px] uppercase tracking-widest text-primary font-bold">GUNUNG PENDAKIAN</span>
                     <span id="inspector-status-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-headline text-[10px] font-bold">
                       <span class="w-1.5 h-1.5 rounded-full bg-tertiary-container animate-ping"></span> JALUR BUKA RESMI
                     </span>
@@ -499,29 +525,27 @@
               </div>
             </div>
 
-            <!-- Metric Grid (4 Cards) - Mata Air Diganti Total Pos Terdaftar -->
+            <!-- Metric Grid (4 Cards) - Fokus Jarak BC-Puncak, Jumlah Pos, Basecamp, dan Elevasi -->
             <div class="grid grid-cols-4 gap-2 p-3 bg-surface-container-lowest border-b border-surface-container">
               <div class="bg-surface-container-low p-2.5 rounded-xl border border-surface-container">
-                <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block">Basecamp Aktif</span>
-                <span id="metric-basecamp-count" class="font-headline font-bold text-xs text-primary block truncate">Selo</span>
-                <span id="metric-basecamp-list" class="text-[10px] text-on-surface-variant block truncate">Pos 1 - Pos 5</span>
+                <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block">Jarak BC - Puncak</span>
+                <span id="metric-trail-distance" class="font-headline font-bold text-xs sm:text-sm text-primary block font-mono truncate">-- KM</span>
+                <span id="metric-trail-distance-desc" class="text-[10px] text-on-surface-variant block truncate">Panjang Jalur</span>
               </div>
               <div class="bg-surface-container-low p-2.5 rounded-xl border border-surface-container">
-                <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block">SIMAKSI Online</span>
-                <span id="metric-quota" class="font-headline font-bold text-xs text-tertiary">142/250</span>
-                <span class="text-[10px] text-tertiary block">Tersisa Kuota</span>
-              </div>
-              <div class="bg-surface-container-low p-2.5 rounded-xl border border-surface-container">
-                <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block">Cuaca Puncak</span>
-                <span id="metric-weather" class="font-headline font-bold text-xs text-on-surface flex items-center gap-1">
-                  14°C <span class="material-symbols-outlined text-[14px] text-secondary">cloud</span>
-                </span>
-                <span id="metric-weather-desc" class="text-[10px] text-on-surface-variant block truncate">Cerah Berawan</span>
-              </div>
-              <div class="bg-surface-container-low p-2.5 rounded-xl border border-surface-container">
-                <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block">Total Pos Jalur</span>
-                <span id="metric-total-pos" class="font-headline font-bold text-xs text-primary">5 Pos</span>
+                <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block">Jumlah Pos Jalur</span>
+                <span id="metric-total-pos" class="font-headline font-bold text-xs sm:text-sm text-secondary block font-mono truncate">-- Pos</span>
                 <span id="metric-total-pos-desc" class="text-[10px] text-on-surface-variant block truncate">Waypoint Terdata</span>
+              </div>
+              <div class="bg-surface-container-low p-2.5 rounded-xl border border-surface-container">
+                <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block">Basecamp Aktif</span>
+                <span id="metric-basecamp-count" class="font-headline font-bold text-xs text-on-surface block truncate">Basecamp</span>
+                <span id="metric-basecamp-list" class="text-[10px] text-on-surface-variant block truncate">Titik Awal</span>
+              </div>
+              <div class="bg-surface-container-low p-2.5 rounded-xl border border-surface-container">
+                <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block">Puncak & Tanjakan</span>
+                <span id="metric-puncak-elev" class="font-headline font-bold text-xs text-on-surface block truncate">-- mdpl</span>
+                <span id="metric-gain-val" class="text-[10px] text-secondary font-bold block truncate">+-- m Gain</span>
               </div>
             </div>
 
@@ -554,8 +578,8 @@
                   <span class="material-symbols-outlined text-[16px]">download</span>
                   <span>GPX Trail</span>
                 </button>
-                <button onclick="startNavigationToActiveBasecamp()" class="px-3 py-2 rounded-xl bg-surface-container-lowest text-secondary hover:bg-surface-container-high transition-colors font-headline text-xs font-bold flex items-center gap-1.5 shadow-sm border border-surface-container" title="Navigasi Arah dari Lokasi Saya">
-                  <span class="material-symbols-outlined text-[16px]">directions</span>
+                <button onclick="openArahRutePendakianModal()" class="px-3 py-2 rounded-xl bg-surface-container-lowest text-secondary hover:bg-surface-container-high transition-colors font-headline text-xs font-bold flex items-center gap-1.5 shadow-sm border border-surface-container" title="Panduan Arah Rute (Basecamp ke Puncak)">
+                  <span class="material-symbols-outlined text-[16px]">alt_route</span>
                   <span class="hidden sm:inline">Arah Rute</span>
                 </button>
                 <button onclick="startSimulatedTracking()" class="px-3 py-2 rounded-xl bg-secondary hover:bg-secondary-container text-white transition-colors font-headline text-xs font-bold flex items-center gap-1.5 shadow-sm" title="Mulai Live Tracking Jalur Ini">
@@ -678,7 +702,7 @@
             <span class="material-symbols-outlined text-primary text-[24px]">holiday_village</span>
             <h2 class="font-headline font-bold text-2xl lg:text-3xl text-primary tracking-tight">Direktori Basecamp Pulau Jawa</h2>
           </div>
-          <p class="text-sm text-on-surface-variant mt-1">Kelola data resmi titik pos perizinan SIMAKSI, kontak pengelola, dan koordinat GPS.</p>
+          <p class="text-sm text-on-surface-variant mt-1">Kelola data resmi titik pos perizinan pendakian, kontak pengelola, dan koordinat GPS.</p>
         </div>
         <button onclick="openBasecampModal()" class="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-headline text-xs font-bold flex items-center gap-2 shadow-sm transition-all self-start sm:self-auto">
           <span class="material-symbols-outlined text-[18px]">add_location_alt</span>
@@ -733,108 +757,6 @@
 
     </div>
 
-    <!-- ==================== VIEW 4: SIMAKSI & SOP ==================== -->
-    <div id="view-simaksi" class="hidden w-full max-w-5xl mx-auto p-4 lg:p-8 flex flex-col gap-6">
-      
-      <div class="bg-surface-container-lowest p-6 rounded-2xl border border-surface-container shadow-sm">
-        <div class="flex items-center gap-3 mb-2">
-          <span class="material-symbols-outlined text-primary text-[32px]">verified_user</span>
-          <h2 class="font-headline font-bold text-2xl lg:text-3xl text-primary">Standar Operasional Prosedur (SOP) & SIMAKSI</h2>
-        </div>
-        <p class="text-sm text-on-surface-variant">Panduan resmi pendakian gunung di Pulau Jawa sesuai regulasi Balai Taman Nasional dan Perhutani.</p>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        
-        <!-- Syarat Dokumen -->
-        <div class="bg-surface-container-lowest p-5 rounded-2xl border border-surface-container shadow-sm">
-          <div class="flex items-center gap-2 mb-3 text-primary">
-            <span class="material-symbols-outlined text-[20px]">badge</span>
-            <h3 class="font-headline font-bold text-base">1. Persyaratan Administrasi</h3>
-          </div>
-          <ul class="text-xs text-on-surface-variant space-y-2 list-disc pl-4">
-            <li>Identitas Asli (KTP / SIM / Paspor) yang masih berlaku untuk setiap anggota tim.</li>
-            <li>Surat Keterangan Sehat asli dari dokter/puskesmas resmi (berlaku maksimal H-3).</li>
-            <li>Bukti booking online SIMAKSI untuk gunung dengan kuota harian.</li>
-            <li>Surat izin orang tua bertanda tangan materai untuk pendaki di bawah umur 17 tahun.</li>
-          </ul>
-        </div>
-
-        <!-- Perlengkapan Wajib -->
-        <div class="bg-surface-container-lowest p-5 rounded-2xl border border-surface-container shadow-sm">
-          <div class="flex items-center gap-2 mb-3 text-primary">
-            <span class="material-symbols-outlined text-[20px]">backpack</span>
-            <h3 class="font-headline font-bold text-base">2. Standar Perlengkapan Wajib</h3>
-          </div>
-          <ul class="text-xs text-on-surface-variant space-y-2 list-disc pl-4">
-            <li>Tenda dengan double layer tahan cuaca badai gunung tropis.</li>
-            <li>Sleeping bag rating nyaman minimal 10°C dan matras isolasi.</li>
-            <li>Jas hujan / ponco outdoor, jaket windproof/waterproof hangat.</li>
-            <li>Peralatan navigasi (peta offline JawaRidge / GPX tracker) dan kompas bidik.</li>
-            <li>P3K survival kit pribadi, emergency blanket, dan headlamp dengan baterai cadangan.</li>
-          </ul>
-        </div>
-
-        <!-- Etika Lingkungan -->
-        <div class="bg-surface-container-lowest p-5 rounded-2xl border border-surface-container shadow-sm">
-          <div class="flex items-center gap-2 mb-3 text-tertiary">
-            <span class="material-symbols-outlined text-[20px]">eco</span>
-            <h3 class="font-headline font-bold text-base">3. Kode Etik Zero Waste & Konservasi</h3>
-          </div>
-          <ul class="text-xs text-on-surface-variant space-y-2 list-disc pl-4">
-            <li>Wajib membawa kembali seluruh sampah (Trash In Trash Out), diperiksa saat checkout basecamp.</li>
-            <li>Dilarang keras membuat api unggun di area padang savana atau hutan pinus rawan kebakaran.</li>
-            <li>Dilarang memetik bunga edelweiss atau merusak vegetasi endemik pegunungan Jawa.</li>
-            <li>Jaga kemurnian sumber mata air, jangan mencuci peralatan makan memakai sabun kimia di mata air.</li>
-          </ul>
-        </div>
-
-        <!-- Kontak Darurat -->
-        <div class="bg-surface-container-lowest p-5 rounded-2xl border border-surface-container shadow-sm">
-          <div class="flex items-center gap-2 mb-3 text-error">
-            <span class="material-symbols-outlined text-[20px]">sos</span>
-            <h3 class="font-headline font-bold text-base">4. Jalur Darurat SAR & Evakuasi</h3>
-          </div>
-          <div class="space-y-2 text-xs">
-            <div class="flex items-center justify-between p-2 rounded-xl bg-error-container text-on-error-container font-bold">
-              <span>BASARNAS Call Center</span>
-              <a href="tel:115" class="underline">115</a>
-            </div>
-            <div class="flex items-center justify-between p-2 rounded-xl bg-surface-container font-bold text-on-surface">
-              <span>Layanan Darurat Umum Polisi & SAR</span>
-              <a href="tel:112" class="underline">112</a>
-            </div>
-            <p class="text-[11px] text-on-surface-variant mt-2">Bila terjadi disorientasi jalur atau hipotermia, segera bertahan di shelter pos terdekat dan aktifkan sinyal whistle darurat (3 tiupan panjang berselang).</p>
-          </div>
-        </div>
-
-      </div>
-
-    </div>
-
-    <!-- ==================== VIEW 5: CUACA & STATUS VULKANIK ==================== -->
-    <div id="view-cuaca" class="hidden w-full max-w-6xl mx-auto p-4 lg:p-8 flex flex-col gap-6">
-      
-      <div class="bg-surface-container-lowest p-6 rounded-2xl border border-surface-container shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div class="flex items-center gap-3">
-            <span class="material-symbols-outlined text-secondary text-[32px]">volcano</span>
-            <h2 class="font-headline font-bold text-2xl lg:text-3xl text-primary">Monitoring Cuaca & Status Vulkanik PVMBG</h2>
-          </div>
-          <p class="text-sm text-on-surface-variant mt-1">Pemantauan seismisitas, deformasi kawah, dan prakiraan cuaca puncak pegunungan Pulau Jawa.</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="w-3 h-3 rounded-full bg-secondary animate-ping"></span>
-          <span class="font-headline text-xs font-bold text-secondary uppercase">Pembaruan Data Berkala</span>
-        </div>
-      </div>
-
-      <!-- Volcano Status Cards Grid -->
-      <div id="volcano-monitor-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <!-- Loaded via JS -->
-      </div>
-
-    </div>
 
   </main>
 
@@ -843,13 +765,13 @@
     <div class="w-full flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-on-surface-variant">
       <div class="flex items-center gap-2 font-headline font-bold text-primary">
         <span class="material-symbols-outlined text-[18px]">terrain</span>
-        <span>JawaRidge</span>
+        <span>KANIMAP</span>
         <span class="text-outline-variant font-normal">•</span>
         <span class="text-on-surface-variant font-body font-normal">Pusat Geospasial Pendakian Seluruh Pegunungan Pulau Jawa (Jabar · Jateng · DIY · Jatim)</span>
       </div>
       <div class="flex items-center gap-4">
         <span class="font-headline font-semibold text-[11px] uppercase">LEAFLET GIS · WGS84 ZONE 48S-49S</span>
-        <span>© 2025-2026 JawaRidge Geospatial System</span>
+        <span>© 2025-2026 KANIMAP Geospatial System</span>
       </div>
     </div>
   </footer>
@@ -920,10 +842,6 @@
           <input id="form-bc-kontak" placeholder="0812-xxxx-xxxx" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none" type="text">
         </div>
 
-        <div>
-          <label class="font-headline font-bold text-on-surface block mb-1">Info SIMAKSI / Tiket</label>
-          <input id="form-bc-simaksi" placeholder="Registrasi online di situs resmi..." class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none" type="text">
-        </div>
 
         <div class="p-3 bg-surface-container-low rounded-xl border border-surface-container flex items-center justify-between">
           <span class="text-on-surface-variant text-[11px]">Ambil koordinat GPS dari klik pada peta:</span>
@@ -1011,7 +929,7 @@
 
         <div>
           <label class="font-headline font-bold text-on-surface block mb-1">Tipe / Morfologi Gunung</label>
-          <input id="form-gunung-tipe" placeholder="Stratovolcano Aktif (Tipe-A)" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none" type="text">
+          <input id="form-gunung-tipe" placeholder="Karakter / Wilayah Pegunungan" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none" type="text">
         </div>
 
         <div>
@@ -1125,16 +1043,18 @@
     </div>
   </div>
 
-  <!-- ==================== MODAL: NAVIGASI RUTE KE BASECAMP ==================== -->
+  <!-- ==================== MODAL: PANDUAN ARAH RUTE PENDAKIAN (BASECAMP KE PUNCAK) ==================== -->
   <div id="nav-modal" class="fixed inset-0 z-50 hidden bg-inverse-surface/50 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-surface-container-lowest rounded-2xl shadow-2xl border border-surface-container w-full max-w-xl overflow-hidden flex flex-col max-h-[85vh]">
+    <div class="bg-surface-container-lowest rounded-2xl shadow-2xl border border-surface-container w-full max-w-xl overflow-hidden flex flex-col max-h-[88vh]">
       
       <div class="p-4 bg-surface-container-low border-b border-surface-container flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-secondary text-[24px]">directions</span>
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            <span class="material-symbols-outlined text-[22px]">alt_route</span>
+          </div>
           <div>
-            <h3 class="font-headline font-bold text-base text-primary">Navigasi Rute Perjalanan ke Basecamp</h3>
-            <span id="nav-modal-destination" class="text-xs text-on-surface-variant font-semibold">Basecamp Selo</span>
+            <h3 class="font-headline font-bold text-base text-primary">Panduan Arah Rute Pendakian</h3>
+            <span id="nav-modal-destination" class="text-xs text-on-surface-variant font-semibold">Gunung Lawu · Via Cemoro Sewu</span>
           </div>
         </div>
         <button onclick="closeNavModal()" class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg">
@@ -1142,31 +1062,53 @@
         </button>
       </div>
 
-      <!-- Route Metric Summary -->
-      <div class="p-4 bg-surface-container-lowest border-b border-surface-container flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="flex flex-col">
-            <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant">Estimasi Jarak</span>
-            <span id="nav-modal-distance" class="font-headline font-bold text-lg text-primary">-- km</span>
-          </div>
-          <div class="w-px h-8 bg-surface-container"></div>
-          <div class="flex flex-col">
-            <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant">Waktu Tempuh</span>
-            <span id="nav-modal-duration" class="font-headline font-bold text-lg text-secondary">-- Menit</span>
-          </div>
+      <!-- Point of Origin & Destination Callout -->
+      <div class="px-4 py-2.5 bg-surface-container-low/50 border-b border-surface-container flex items-center justify-between text-xs">
+        <div class="flex items-center gap-1.5 truncate">
+          <span class="material-symbols-outlined text-secondary text-[16px]">location_on</span>
+          <span class="font-headline text-on-surface-variant">Titik Berdiri:</span>
+          <strong id="nav-modal-start-point" class="text-secondary font-bold truncate">Basecamp (1.469 mdpl)</strong>
         </div>
-        <span class="font-headline text-[11px] font-bold text-on-surface-variant bg-surface-container px-3 py-1 rounded-full">OSRM Routing Engine</span>
+        <span class="material-symbols-outlined text-outline text-[16px]">arrow_forward</span>
+        <div class="flex items-center gap-1.5 truncate">
+          <span class="material-symbols-outlined text-primary text-[16px]">flag</span>
+          <span class="font-headline text-on-surface-variant">Titik Akhir:</span>
+          <strong id="nav-modal-end-point" class="text-primary font-bold truncate">Puncak (3.265 mdpl)</strong>
+        </div>
       </div>
 
-      <!-- Step Instructions List -->
-      <div id="nav-modal-steps" class="p-4 overflow-y-auto flex flex-col gap-2.5 text-xs max-h-80">
+      <!-- Route Metric Summary Grid -->
+      <div class="p-3.5 bg-surface-container-lowest border-b border-surface-container grid grid-cols-4 gap-2">
+        <div class="bg-surface-container-low p-2 rounded-xl text-center">
+          <span class="font-headline text-[9px] uppercase font-bold text-on-surface-variant block">Jarak Jalur</span>
+          <span id="nav-modal-distance" class="font-headline font-bold text-sm text-primary block mt-0.5">-- km</span>
+        </div>
+        <div class="bg-surface-container-low p-2 rounded-xl text-center">
+          <span class="font-headline text-[9px] uppercase font-bold text-on-surface-variant block">Tanjakan (Gain)</span>
+          <span id="nav-modal-gain" class="font-headline font-bold text-sm text-secondary block mt-0.5">+-- m</span>
+        </div>
+        <div class="bg-surface-container-low p-2 rounded-xl text-center">
+          <span class="font-headline text-[9px] uppercase font-bold text-on-surface-variant block">Estimasi Waktu</span>
+          <span id="nav-modal-duration" class="font-headline font-bold text-sm text-on-surface block mt-0.5">-- Jam</span>
+        </div>
+        <div class="bg-surface-container-low p-2 rounded-xl text-center">
+          <span class="font-headline text-[9px] uppercase font-bold text-on-surface-variant block">Jumlah Pos</span>
+          <span id="nav-modal-pos-count" class="font-headline font-bold text-sm text-primary block mt-0.5">-- Pos</span>
+        </div>
+      </div>
+
+      <!-- Step Instructions List (Basecamp -> Pos 1 -> Pos 2 -> Puncak) -->
+      <div id="nav-modal-steps" class="p-4 overflow-y-auto flex flex-col gap-2 text-xs max-h-80">
         <!-- Loaded via JS -->
       </div>
 
-      <div class="p-3 bg-surface-container-low border-t border-surface-container flex items-center justify-between">
-        <span class="text-[11px] text-on-surface-variant">Rute dihitung dari posisi GPS Anda.</span>
-        <button onclick="closeNavModal()" class="px-4 py-2 rounded-xl bg-primary text-on-primary font-headline text-xs font-bold">
-          Tutup Panduan
+      <div class="p-3 bg-surface-container-low border-t border-surface-container flex items-center justify-between gap-2">
+        <button onclick="startLiveTrackingFromArahRute()" class="px-4 py-2 rounded-xl bg-secondary hover:bg-secondary-container text-white font-headline text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95">
+          <span class="material-symbols-outlined text-[16px]">near_me</span>
+          <span>Mulai Live Tracking dari Basecamp</span>
+        </button>
+        <button onclick="closeNavModal()" class="px-4 py-2 rounded-xl bg-surface-container text-on-surface hover:bg-surface-container-high font-headline text-xs font-bold transition-colors">
+          Tutup
         </button>
       </div>
 

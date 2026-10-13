@@ -880,10 +880,10 @@ const exportGpx = async (req, res) => {
     }
 
     const gpxXml = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="JawaRidge Geospatial System" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="KANIMAP Geospatial System" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
     <name>Jalur Pendakian ${basecamp.gunung.nama} via ${basecamp.jalurVia}</name>
-    <desc>Data jalur resmi Pulau Jawa diekspor dari JawaRidge GIS</desc>
+    <desc>Data jalur resmi Pulau Jawa diekspor dari KANIMAP GIS</desc>
     <time>${new Date().toISOString()}</time>
   </metadata>
   <trk>

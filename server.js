@@ -27,7 +27,7 @@ app.use((req, res) => {
 // Start Server
 const server = app.listen(PORT, () => {
   console.log(`=======================================================`);
-  console.log(`🏔️ JawaRidge - Sistem Geospasial Pemetaan Jalur Basecamp & Pos Gunung`);
+  console.log(`🏔️ KANIMAP - Sistem Geospasial Pemetaan Jalur Basecamp & Pos Gunung`);
   console.log(`🚀 Server aktif di: http://localhost:${PORT}`);
   console.log(`📡 API Gunung:    http://localhost:${PORT}/api/gunung`);
   console.log(`⛺ API Basecamp:  http://localhost:${PORT}/api/basecamp`);

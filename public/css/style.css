@@ -1,5 +1,5 @@
 /* ==========================================================================
-   JawaRidge - Sistem Ekspedisi Geospasial Pulau Jawa
+   KANIMAP - Sistem Ekspedisi Geospasial Pulau Jawa
    Custom Stylesheet based on referensi_dashboard DESIGN.md
    ========================================================================== */
 
@@ -197,4 +197,47 @@
   to {
     stroke-dashoffset: -18;
   }
+}
+
+/* Trail Polyline & Tooltip Custom Styling */
+.trail-tooltip {
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(0, 71, 36, 0.25) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px -4px rgba(17, 29, 35, 0.16) !important;
+  padding: 6px 12px !important;
+}
+
+.trail-tooltip::before {
+  border-top-color: #ffffff !important;
+}
+
+.custom-geo-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -100%);
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.custom-geo-pin:hover {
+  transform: translate(-50%, -100%) scale(1.2);
+  z-index: 9999 !important;
+}
+
+.geo-pin-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  margin-bottom: 3px;
+  color: #111d23;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  pointer-events: none;
 }

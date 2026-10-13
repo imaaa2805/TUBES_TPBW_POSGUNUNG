@@ -1,5 +1,5 @@
 {
-  "name": "jawaridge_gis_jalur_pendakian_pos_gunung",
+  "name": "kanimap_gis_jalur_pendakian_pos_gunung",
   "version": "2.0.0",
   "description": "Sistem Informasi Geospasial Pemetaan Jalur Basecamp & Pos Pendakian Gunung Pulau Jawa",
   "main": "server.js",
