@@ -3157,52 +3157,21 @@ function onPlannerJalurChange(basecampId) {
 }
 
 /**
- * Ganti Arah Kalkulasi:
- * - 'arrival': "Mau Sampai Jam Berapa (Puncak) ➔ Harus Naik Jam Berapa (Basecamp)"
- * - 'departure': "Mulai Jam Berapa (Basecamp) ➔ Tiba Jam Berapa (Puncak & Basecamp)"
+ * Mode Kalkulator: Target Tiba di Puncak ("Mau Sampai Jam Berapa" ➔ "Harus Naik Jam Berapa")
  */
-function setPlannerCalcDirection(direction) {
-  plannerCalcDirection = direction;
+function setPlannerCalcDirection(direction = 'arrival') {
+  plannerCalcDirection = 'arrival';
   updatePlannerDirectionUI();
-
-  // Sesuaikan nilai default time picker jika belum diubah
-  const timePicker = document.getElementById('planner-time-picker');
-  if (timePicker) {
-    if (direction === 'arrival' && (!plannerTimePickerValue || plannerTimePickerValue === '07:00')) {
-      plannerTimePickerValue = '05:15';
-      timePicker.value = '05:15';
-    } else if (direction === 'departure' && (!plannerTimePickerValue || plannerTimePickerValue === '05:15')) {
-      plannerTimePickerValue = '07:00';
-      timePicker.value = '07:00';
-    }
-  }
-
   calculateAndRenderTripPlan();
 }
 
 function updatePlannerDirectionUI() {
-  const btnArrival = document.getElementById('btn-calc-arrival');
-  const btnDeparture = document.getElementById('btn-calc-departure');
   const inputLabel = document.getElementById('planner-input-time-label');
-
-  if (plannerCalcDirection === 'arrival') {
-    if (btnArrival) btnArrival.className = 'px-3 py-1.5 rounded-lg font-headline font-bold text-xs bg-primary text-white shadow-xs transition-all flex items-center gap-1';
-    if (btnDeparture) btnDeparture.className = 'px-3 py-1.5 rounded-lg font-headline font-semibold text-xs text-on-surface-variant hover:text-on-surface transition-all flex items-center gap-1';
-    if (inputLabel) {
-      inputLabel.innerHTML = `
-        <span class="material-symbols-outlined text-[16px] text-secondary">alarm</span>
-        <span>Target Tiba di Puncak Pukul:</span>
-      `;
-    }
-  } else {
-    if (btnArrival) btnArrival.className = 'px-3 py-1.5 rounded-lg font-headline font-semibold text-xs text-on-surface-variant hover:text-on-surface transition-all flex items-center gap-1';
-    if (btnDeparture) btnDeparture.className = 'px-3 py-1.5 rounded-lg font-headline font-bold text-xs bg-primary text-white shadow-xs transition-all flex items-center gap-1';
-    if (inputLabel) {
-      inputLabel.innerHTML = `
-        <span class="material-symbols-outlined text-[16px] text-primary">play_circle</span>
-        <span>Mulai Naik dari Basecamp Pukul:</span>
-      `;
-    }
+  if (inputLabel) {
+    inputLabel.innerHTML = `
+      <span class="material-symbols-outlined text-[16px] text-secondary">alarm</span>
+      <span>Target Tiba di Puncak Pukul:</span>
+    `;
   }
 }
 
@@ -3269,8 +3238,8 @@ async function calculateAndRenderTripPlan() {
   }
 
   try {
-    const timeVal = plannerTimePickerValue || (plannerCalcDirection === 'arrival' ? '05:15' : '07:00');
-    const url = `/api/trip-planner/${plannerActiveBasecamp.id}?calcDirection=${plannerCalcDirection}&targetArrivalTime=${encodeURIComponent(timeVal)}&targetDepartureTime=${encodeURIComponent(timeVal)}&pace=${encodeURIComponent(plannerPace)}`;
+    const timeVal = plannerTimePickerValue || '05:15';
+    const url = `/api/trip-planner/${plannerActiveBasecamp.id}?calcDirection=arrival&targetArrivalTime=${encodeURIComponent(timeVal)}&pace=${encodeURIComponent(plannerPace)}`;
     
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
@@ -3283,7 +3252,7 @@ async function calculateAndRenderTripPlan() {
     throw new Error(json.message || 'Gagal memuat trip plan dari server');
   } catch (err) {
     console.warn('Trip Planner API fallback ke kalkulasi lokal:', err);
-    const localPlan = calculateLocalTripPlan(plannerActiveMountain, plannerActiveBasecamp, plannerCalcDirection, plannerPace, plannerTimePickerValue);
+    const localPlan = calculateLocalTripPlan(plannerActiveMountain, plannerActiveBasecamp, 'arrival', plannerPace, plannerTimePickerValue);
     lastGeneratedTripPlan = localPlan;
     renderTripPlanUI(localPlan);
   }
@@ -3311,10 +3280,10 @@ function renderTripPlanUI(plan) {
   const recIconEl = document.getElementById('planner-rec-icon');
 
   if (recBadgeEl) {
-    recBadgeEl.innerText = rec.title || (plannerCalcDirection === 'arrival' ? 'ESTIMASI JADWAL KEBERANGKATAN RESMI:' : 'ESTIMASI TIBA DI PUNCAK & KEMBALI:');
+    recBadgeEl.innerText = rec.title || 'ESTIMASI JADWAL KEBERANGKATAN RESMI:';
   }
   if (recActionLabel) {
-    recActionLabel.innerText = rec.actionLabel || (plannerCalcDirection === 'arrival' ? 'Anda Harus Mulai Naik dari Basecamp:' : 'Mulai Naik dari Basecamp:');
+    recActionLabel.innerText = rec.actionLabel || 'Anda Harus Mulai Naik dari Basecamp:';
   }
   if (recTimeEl) {
     recTimeEl.innerText = rec.recommendedStartTime || '--:-- WIB';
@@ -3323,7 +3292,7 @@ function renderTripPlanUI(plan) {
     recReasonEl.innerText = rec.reason || '';
   }
   if (recTargetLabel) {
-    recTargetLabel.innerText = rec.targetLabel || (plannerCalcDirection === 'arrival' ? 'Target Tiba di Puncak' : 'Estimasi Tiba di Puncak');
+    recTargetLabel.innerText = rec.targetLabel || 'Target Tiba di Puncak';
   }
   if (recPeakEl) {
     recPeakEl.innerText = rec.targetPeakTime || '--:-- WIB';
@@ -3333,7 +3302,7 @@ function renderTripPlanUI(plan) {
   }
 
   if (recIconEl) {
-    recIconEl.innerText = plannerCalcDirection === 'arrival' ? 'wb_twilight' : 'directions_walk';
+    recIconEl.innerText = 'wb_twilight';
   }
 
   // 2. 4 Kartu Metrik
@@ -3539,7 +3508,7 @@ function calculateLocalTripPlan(mountain, basecamp, direction, pace, timeStr) {
   let startMinutes = 0;
   let recommendation = {};
 
-  if (direction === 'arrival') {
+  if (direction !== 'departure') {
     const targetMins = parseClock(timeStr || '05:15');
     startMinutes = (targetMins - totalAscentMinutes + 1440) % 1440;
     const targetFormatted = addMinutes(targetMins, 0);

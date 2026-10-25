@@ -1312,20 +1312,14 @@
               </span>
               <div>
                 <h4 class="font-headline font-bold text-sm text-primary">Kalkulator Waktu & Target Perjalanan</h4>
-                <p class="text-[11px] text-on-surface-variant">Tentukan target waktu tiba di puncak atau jam berangkat dari basecamp.</p>
+                <p class="text-[11px] text-on-surface-variant">Tentukan target waktu tiba di puncak untuk menghitung rekomendasi jam mulai mendaki dari basecamp.</p>
               </div>
             </div>
 
-            <!-- Direction Switcher (Target Tiba vs Mulai Naik) -->
-            <div class="flex items-center gap-1 bg-surface-container-low p-1 rounded-xl border border-surface-container" id="planner-direction-toggle">
-              <button type="button" onclick="setPlannerCalcDirection('arrival')" id="btn-calc-arrival" class="px-3 py-1.5 rounded-lg font-headline font-bold text-xs bg-primary text-white shadow-xs transition-all flex items-center gap-1">
-                <span class="material-symbols-outlined text-[15px]">flag</span>
-                <span>Mau Sampai Jam Berapa</span>
-              </button>
-              <button type="button" onclick="setPlannerCalcDirection('departure')" id="btn-calc-departure" class="px-3 py-1.5 rounded-lg font-headline font-semibold text-xs text-on-surface-variant hover:text-on-surface transition-all flex items-center gap-1">
-                <span class="material-symbols-outlined text-[15px]">play_circle</span>
-                <span>Mulai Jam Berapa</span>
-              </button>
+            <!-- Mode Indikator: Mau Sampai Jam Berapa -->
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary border border-primary/25 text-xs font-headline font-bold shadow-2xs">
+              <span class="material-symbols-outlined text-[15px]">flag</span>
+              <span>Mau Sampai Jam Berapa</span>
             </div>
           </div>
 
