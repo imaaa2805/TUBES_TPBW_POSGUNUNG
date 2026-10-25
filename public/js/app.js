@@ -1021,10 +1021,6 @@ function updateInspectorPanel(mountain, basecamp) {
     statusBadge.innerHTML = `<span class="material-symbols-outlined text-[12px]">lock</span> JALUR DITUTUP SEMENTARA`;
   }
 
-  // Type
-  const typeEl = document.getElementById('inspector-type');
-  if (typeEl) typeEl.innerText = mountain.tipeGunung || 'GUNUNG PENDAKIAN';
-
   // Render Jalur Pills with distance KM and pos count
   const jalurPillsContainer = document.getElementById('inspector-jalur-pills');
   document.getElementById('inspector-jalur-count-badge').innerText = `${mountain.basecamps.length} Jalur`;
@@ -2093,7 +2089,6 @@ function openGunungModal(id = null) {
       document.getElementById('form-gunung-provinsi').value = m.provinsi;
       document.getElementById('form-gunung-kabupaten').value = m.kabupaten;
       document.getElementById('form-gunung-status').value = m.statusJalur || 'Buka';
-      document.getElementById('form-gunung-tipe').value = m.tipeGunung || 'Pegunungan Jawa';
       document.getElementById('form-gunung-deskripsi').value = m.deskripsi || '';
       document.getElementById('form-gunung-lat').value = m.latitude || '';
       document.getElementById('form-gunung-lng').value = m.longitude || '';
@@ -2130,7 +2125,6 @@ async function submitGunungForm(e) {
     provinsi: document.getElementById('form-gunung-provinsi').value,
     kabupaten: document.getElementById('form-gunung-kabupaten').value,
     statusJalur: document.getElementById('form-gunung-status').value,
-    tipeGunung: document.getElementById('form-gunung-tipe').value,
     deskripsi: document.getElementById('form-gunung-deskripsi').value,
     latitude: parseFloat(document.getElementById('form-gunung-lat').value) || undefined,
     longitude: parseFloat(document.getElementById('form-gunung-lng').value) || undefined
