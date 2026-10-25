@@ -961,6 +961,386 @@ const updateCoordinatesBatch = async (req, res) => {
   }
 };
 
+// ─── 8. MOUNTAIN TRIP PLANNER & ESTIMASI WAKTU PENDAKIAN ───────────
+const getTripPlan = async (req, res) => {
+  try {
+    const { basecampId } = req.params;
+    const { 
+      pace = 'sedang', 
+      mode = 'target_arrival', 
+      targetArrivalTime = '05:15',
+      targetDepartureTime = '07:00',
+      calcDirection = 'arrival',
+      startTime = '07:00' 
+    } = req.query;
+
+    const basecamp = await prisma.basecamp.findUnique({
+      where: { id: parseInt(basecampId, 10) },
+      include: {
+        gunung: true,
+        pos: { orderBy: { urutan: 'asc' } }
+      }
+    });
+
+    if (!basecamp) {
+      return res.status(404).json({ success: false, message: 'Basecamp tidak ditemukan' });
+    }
+
+    const mountain = basecamp.gunung;
+
+    // Expedition waypoints: Basecamp -> Pos 1..N -> Puncak
+    const waypoints = [
+      {
+        id: `bc-${basecamp.id}`,
+        name: basecamp.nama,
+        type: 'basecamp',
+        urutan: 0,
+        lat: basecamp.latitude,
+        lng: basecamp.longitude,
+        elev: basecamp.elevasi || 1500,
+        areaCamp: true,
+        adaAir: true
+      },
+      ...basecamp.pos.map((p, idx) => ({
+        id: `pos-${p.id}`,
+        name: p.namaPos,
+        type: 'pos',
+        urutan: p.urutan || (idx + 1),
+        lat: p.latitude,
+        lng: p.longitude,
+        elev: p.elevasi || (basecamp.elevasi || 1500) + (idx + 1) * 250,
+        areaCamp: p.areaCamp,
+        adaAir: p.adaAir
+      }))
+    ];
+
+    if (mountain.latitude && mountain.longitude) {
+      const lastWp = waypoints[waypoints.length - 1];
+      const dPeak = calculateHaversineMeters(lastWp.lat, lastWp.lng, mountain.latitude, mountain.longitude);
+      if (dPeak > 100 && !lastWp.name.toLowerCase().includes('puncak')) {
+        waypoints.push({
+          id: `summit-${mountain.id}`,
+          name: `Puncak ${mountain.nama}`,
+          type: 'summit',
+          urutan: waypoints.length,
+          lat: mountain.latitude,
+          lng: mountain.longitude,
+          elev: mountain.ketinggian,
+          areaCamp: false,
+          adaAir: false
+        });
+      }
+    }
+
+    // Pace configuration (Tobler's Hiking function / Naismith)
+    const paceConfig = {
+      santai: { flatSpeed: 2.0, climbSpeed: 250, restMinutes: 15, peakStayMinutes: 45, label: 'Santai / Pemula' },
+      sedang: { flatSpeed: 2.8, climbSpeed: 380, restMinutes: 10, peakStayMinutes: 45, label: 'Sedang / Reguler' },
+      cepat: { flatSpeed: 4.0, climbSpeed: 550, restMinutes: 5, peakStayMinutes: 30, label: 'Cepat / Terlatih' }
+    }[pace] || { flatSpeed: 2.8, climbSpeed: 380, restMinutes: 10, peakStayMinutes: 45, label: 'Sedang / Reguler' };
+
+    // Calculate segments
+    const segments = [];
+    let totalAscentMinutes = 0;
+    let totalDistanceM = 0;
+    let totalGainM = 0;
+
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const from = waypoints[i];
+      const to = waypoints[i + 1];
+      const distM = calculateHaversineMeters(from.lat, from.lng, to.lat, to.lng);
+      const elevDiff = (to.elev || 0) - (from.elev || 0);
+      const gainM = Math.max(0, elevDiff);
+
+      const flatMins = (distM / 1000) / paceConfig.flatSpeed * 60;
+      const climbMins = (gainM / paceConfig.climbSpeed) * 60;
+      const walkMins = Math.round(Math.max(12, flatMins + climbMins));
+      const restMins = (i < waypoints.length - 2) ? paceConfig.restMinutes : 0;
+      const legDuration = walkMins + restMins;
+
+      totalDistanceM += distM;
+      totalGainM += gainM;
+      totalAscentMinutes += legDuration;
+
+      segments.push({
+        stepNumber: i + 1,
+        fromName: from.name,
+        toName: to.name,
+        fromElev: from.elev,
+        toElev: to.elev,
+        distanceM: Math.round(distM),
+        distanceKm: Number((distM / 1000).toFixed(2)),
+        gainM,
+        walkMinutes: walkMins,
+        restMinutes: restMins,
+        legDuration,
+        adaAir: to.adaAir,
+        areaCamp: to.areaCamp
+      });
+    }
+
+    const totalDescentMinutes = Math.round(totalAscentMinutes * 0.58);
+    const totalRoundtripMinutes = totalAscentMinutes + paceConfig.peakStayMinutes + totalDescentMinutes;
+
+    const addMinutesToTime = (baseMins, addM) => {
+      const total = (baseMins + addM + 2880) % 1440;
+      const h = Math.floor(total / 60);
+      const m = total % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} WIB`;
+    };
+
+    const parseClockToMinutes = (clockStr) => {
+      const clean = String(clockStr || '07:00').replace(' WIB', '').trim();
+      const parts = clean.split(':');
+      const h = parseInt(parts[0], 10) || 0;
+      const m = parseInt(parts[1], 10) || 0;
+      return h * 60 + m;
+    };
+
+    // Determine start time and bidirectional recommendation
+    let startMinutes = 420; // 07:00
+    let recommendation = {};
+
+    const isArrivalTarget = (calcDirection === 'arrival') || (!req.query.calcDirection && (mode === 'sunrise' || mode === 'target_arrival'));
+
+    if (isArrivalTarget) {
+      // User says: "Saya mau sampai puncak jam segini -> Harus naik jam berapa?"
+      const targetStr = (mode === 'sunrise') ? '05:15' : (targetArrivalTime || '05:15');
+      const targetArrivalMins = parseClockToMinutes(targetStr);
+      startMinutes = (targetArrivalMins - totalAscentMinutes + 1440) % 1440;
+
+      const targetTimeFormatted = addMinutesToTime(targetArrivalMins, 0);
+      const startTimeFormatted = addMinutesToTime(startMinutes, 0);
+      const finishMins = (startMinutes + totalRoundtripMinutes) % 1440;
+      const finishTimeFormatted = addMinutesToTime(finishMins, 0);
+      const ascentDurationFormatted = formatDurationMins(totalAscentMinutes);
+      const roundtripDurationFormatted = formatDurationMins(totalRoundtripMinutes);
+
+      recommendation = {
+        mode: mode === 'sunrise' ? 'sunrise' : 'target_arrival',
+        calcDirection: 'arrival',
+        title: 'REKOMENDASI JADWAL KEBERANGKATAN RESMI:',
+        targetPeakTime: targetTimeFormatted,
+        recommendedStartTime: startTimeFormatted,
+        returnBasecampTime: finishTimeFormatted,
+        totalAscentDuration: ascentDurationFormatted,
+        totalRoundtripDuration: roundtripDurationFormatted,
+        actionLabel: 'Anda Harus Mulai Naik dari Basecamp:',
+        targetLabel: 'Estimasi Kembali di Basecamp',
+        rightTime: finishTimeFormatted,
+        rightDuration: `Total PP: ~${roundtripDurationFormatted}`,
+        reason: `Untuk tiba di Puncak tepat pukul ${targetTimeFormatted}, Anda HARUS mulai mendaki dari Basecamp paling lambat pukul ${startTimeFormatted} (estimasi waktu tempuh naik ${ascentDurationFormatted} pada ritme ${paceConfig.label}). Estimasi tiba kembali di Basecamp pukul ${finishTimeFormatted}.`
+      };
+    } else if (calcDirection === 'departure' || mode === 'target_departure' || mode === 'custom') {
+      // User says: "Saya mau mulai naik jam segini -> Sampai puncak jam berapa?"
+      const departStr = targetDepartureTime || startTime || '07:00';
+      startMinutes = parseClockToMinutes(departStr);
+      const peakMins = (startMinutes + totalAscentMinutes) % 1440;
+      const finishMins = (startMinutes + totalRoundtripMinutes) % 1440;
+
+      const startTimeFormatted = addMinutesToTime(startMinutes, 0);
+      const peakTimeFormatted = addMinutesToTime(peakMins, 0);
+      const finishTimeFormatted = addMinutesToTime(finishMins, 0);
+      const ascentDurationFormatted = formatDurationMins(totalAscentMinutes);
+
+      recommendation = {
+        mode: 'target_departure',
+        calcDirection: 'departure',
+        title: `🚀 Mulai Naik dari Basecamp Pukul ${startTimeFormatted}`,
+        recommendedStartTime: startTimeFormatted,
+        targetPeakTime: peakTimeFormatted,
+        returnBasecampTime: finishTimeFormatted,
+        totalAscentDuration: ascentDurationFormatted,
+        actionLabel: 'Mulai Naik dari Basecamp:',
+        targetLabel: 'Estimasi Tiba di Puncak',
+        reason: `Jika Anda mulai naik dari Basecamp pukul ${startTimeFormatted}, Anda diperkirakan tiba di Puncak pukul ${peakTimeFormatted} dan kembali ke Basecamp pukul ${finishTimeFormatted} (estimasi waktu tempuh naik ${ascentDurationFormatted}).`
+      };
+    } else if (mode === 'dayhike') {
+      startMinutes = 390; // 06:30 WIB
+      const peakTime = addMinutesToTime(startMinutes, totalAscentMinutes);
+      const returnTime = addMinutesToTime(startMinutes, totalRoundtripMinutes);
+      recommendation = {
+        mode: 'dayhike',
+        calcDirection: 'departure',
+        title: '☀️ Pendakian Siang (Day Hike Santai)',
+        recommendedStartTime: '06:30 WIB',
+        targetPeakTime: peakTime,
+        returnBasecampTime: returnTime,
+        totalAscentDuration: formatDurationMins(totalAscentMinutes),
+        actionLabel: 'Mulai Naik Pagi Hari:',
+        targetLabel: 'Estimasi Tiba di Puncak',
+        reason: `Mulai pagi pukul 06:30 WIB saat udara sejuk. Tiba di Puncak sekitar ${peakTime}, dan kembali ke Basecamp pukul ${returnTime} sebelum hari gelap.`
+      };
+    } else if (mode === 'camp') {
+      const campWps = waypoints.filter(w => w.areaCamp && w.type === 'pos');
+      const campPos = campWps.length > 0 ? campWps[campWps.length - 1] : waypoints[Math.max(1, waypoints.length - 2)];
+      startMinutes = 600; // 10:00 WIB Hari ke-1
+      recommendation = {
+        mode: 'camp',
+        calcDirection: 'departure',
+        title: '⛺ Ekspedisi Kemah 2 Hari 1 Malam (Camp & Summit)',
+        recommendedStartTime: '10:00 WIB (Hari ke-1)',
+        campLocation: campPos.name,
+        summitAttackTime: '03:30 WIB (Hari ke-2)',
+        targetPeakTime: '05:15 WIB',
+        totalAscentDuration: formatDurationMins(totalAscentMinutes),
+        actionLabel: 'Mulai Hari 1 (Menuju Camp):',
+        targetLabel: 'Target Sunrise Hari 2',
+        reason: `Hari 1 mulai jam 10:00 WIB santai menuju ${campPos.name} untuk mendirikan tenda sebelum sore. Hari 2 bangun jam 03:00 WIB dan summit attack menuju puncak untuk sunrise.`
+      };
+    }
+
+    // Build timeline
+    let currentMins = startMinutes;
+    const timeline = [];
+
+    timeline.push({
+      time: addMinutesToTime(currentMins, 0),
+      pointName: basecamp.nama,
+      type: 'start',
+      elevasi: basecamp.elevasi || 1500,
+      activity: 'Mulai Keberangkatan dari Basecamp (Start Hiking)',
+      note: 'Registrasi simaksi, doa bersama, cek perlengkapan & perbekalan air.'
+    });
+
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      currentMins += seg.walkMinutes;
+      const isPeak = (i === segments.length - 1);
+
+      if (isPeak) {
+        timeline.push({
+          time: addMinutesToTime(currentMins, 0),
+          pointName: seg.toName,
+          type: 'summit',
+          elevasi: seg.toElev,
+          activity: '🎉 Tiba di Titik Puncak!',
+          note: `Total tanjakan +${totalGainM}m berhasil ditempuh. Nikmati panorama dan istirahat selama ${paceConfig.peakStayMinutes} menit.`
+        });
+        currentMins += paceConfig.peakStayMinutes;
+      } else {
+        timeline.push({
+          time: addMinutesToTime(currentMins, 0),
+          pointName: seg.toName,
+          type: 'pos',
+          elevasi: seg.toElev,
+          activity: `Tiba di ${seg.toName} · Istirahat ${seg.restMinutes} Menit`,
+          note: `${seg.adaAir ? '💧 Sumber air tersedia. ' : ''}${seg.areaCamp ? '⛺ Area camp pendaki. ' : ''}Jarak segmen +${seg.distanceKm} km (+${seg.gainM}m).`
+        });
+        currentMins += seg.restMinutes;
+      }
+    }
+
+    // Descent
+    const descentStartMins = currentMins;
+    currentMins += totalDescentMinutes;
+    timeline.push({
+      time: addMinutesToTime(descentStartMins, 0),
+      pointName: 'Mulai Perjalanan Turun',
+      type: 'descent',
+      activity: 'Turun kembali menuju Basecamp',
+      note: 'Gunakan trekking pole untuk meredam beban lutut, waspada trek berpasir/licin.'
+    });
+
+    timeline.push({
+      time: addMinutesToTime(currentMins, 0),
+      pointName: basecamp.nama,
+      type: 'finish',
+      elevasi: basecamp.elevasi || 1500,
+      activity: '🏁 Tiba Kembali di Basecamp (Finish)',
+      note: 'Lapor kembali ke pengelola / registrasi keluar, istirahat dan pulihkan tenaga.'
+    });
+
+    // Safety Advisories
+    const safetyAdvice = [];
+    const finishClock = (startMinutes + totalRoundtripMinutes) % 1440;
+    if (finishClock > 1050) { // after 17:30
+      safetyAdvice.push({
+        level: 'warning',
+        icon: 'flashlight_on',
+        title: 'Batas Waktu Senja (Penerangan)',
+        desc: `Diperkirakan tiba kembali di Basecamp pukul ${addMinutesToTime(finishClock, 0)} (hari sudah gelap). Wajib membawa headlamp dan baterai cadangan.`
+      });
+    }
+
+    if (mountain.statusJalur !== 'Buka' || mountain.statusVulkanik !== 'Normal') {
+      safetyAdvice.push({
+        level: 'caution',
+        icon: 'warning',
+        title: `Status Gunung: ${mountain.statusVulkanik}`,
+        desc: 'Patuhi batas pendakian resmi yang ditetapkan oleh PVMBG dan pihak Taman Nasional.'
+      });
+    }
+
+    safetyAdvice.push({
+      level: 'info',
+      icon: 'water_drop',
+      title: 'Kebutuhan Air Minum',
+      desc: `Estimasi kebutuhan air: Minimal 2.5 - 3.5 Liter per pendaki. ${basecamp.pos.some(p => p.adaAir) ? 'Terdapat pos dengan sumber mata air di jalur ini.' : 'Jalur ini minim/tidak ada sumber air, bawa air penuh dari basecamp.'}`
+    });
+
+    res.json({
+      success: true,
+      data: {
+        mountain: {
+          id: mountain.id,
+          nama: mountain.nama,
+          ketinggian: mountain.ketinggian,
+          kabupaten: mountain.kabupaten,
+          provinsi: mountain.provinsi
+        },
+        basecamp: {
+          id: basecamp.id,
+          nama: basecamp.nama,
+          jalurVia: basecamp.jalurVia,
+          elevasi: basecamp.elevasi || 1500,
+          totalPos: basecamp.pos.length
+        },
+        recommendation,
+        metrics: {
+          pace: paceConfig.label,
+          totalDistanceKm: Number((totalDistanceM / 1000).toFixed(2)),
+          totalRoundtripDistanceKm: Number(((totalDistanceM * 2) / 1000).toFixed(2)),
+          totalGainM,
+          totalAscentMinutes,
+          totalAscentFormatted: formatDurationMins(totalAscentMinutes),
+          totalDescentMinutes,
+          totalDescentFormatted: formatDurationMins(totalDescentMinutes),
+          totalRoundtripMinutes,
+          totalRoundtripFormatted: formatDurationMins(totalRoundtripMinutes)
+        },
+        segments,
+        timeline,
+        safetyAdvice
+      }
+    });
+  } catch (error) {
+    console.error('Error generating trip plan:', error);
+    res.status(500).json({ success: false, message: 'Gagal membuat rencana perjalanan trip planner', error: error.message });
+  }
+};
+
+function formatDurationMins(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m} Menit`;
+  if (m === 0) return `${h} Jam`;
+  return `${h} Jam ${m} Menit`;
+}
+
+function calculateHaversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3;
+  const phi1 = lat1 * Math.PI / 180;
+  const phi2 = lat2 * Math.PI / 180;
+  const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+  const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+            Math.cos(phi1) * Math.cos(phi2) *
+            Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 function slugify(text) {
   return text.toString().toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\w\-]+/g, '');
 }
@@ -983,5 +1363,7 @@ module.exports = {
   deletePos,
   getRouteNavigation,
   exportGpx,
-  updateCoordinatesBatch
+  updateCoordinatesBatch,
+  getTripPlan
 };
+

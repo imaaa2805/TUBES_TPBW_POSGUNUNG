@@ -426,6 +426,10 @@ function renderMountainCards() {
           </div>
           <div class="flex items-center gap-1">
             ${statusBadge}
+            <button onclick="event.stopPropagation(); openTripPlannerModal(${m.id});" class="px-2 py-0.5 rounded-md bg-primary/10 hover:bg-primary text-primary hover:text-white transition-all font-headline font-bold text-[10px] flex items-center gap-0.5" title="Buka Trip Planner & Estimasi Waktu ${m.nama}">
+              <span class="material-symbols-outlined text-[13px]">schedule</span>
+              <span>Trip Plan</span>
+            </button>
             <button onclick="event.stopPropagation(); openGunungModal(${m.id});" class="p-1 rounded-md hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors" title="Rename / Edit Gunung">
               <span class="material-symbols-outlined text-[14px]">edit</span>
             </button>
@@ -508,11 +512,16 @@ function renderMountainPins() {
       </div>
     `;
 
+    const bubbleSize = isSelected ? 36 : 28;
+    const labelH = 26;
+    const anchorY = Math.round(labelH + bubbleSize / 2);
+    const totalH = Math.round(labelH + bubbleSize);
+
     const iconObj = L.divIcon({
       html: pinHtml,
       className: 'empty-icon',
-      iconSize: [120, 60],
-      iconAnchor: [60, 50]
+      iconSize: [140, totalH],
+      iconAnchor: [70, anchorY]
     });
 
     const marker = L.marker([m.latitude, m.longitude], { icon: iconObj })
@@ -895,11 +904,15 @@ function drawMountainTrail(mountain, basecamp) {
       </div>
     `;
 
+    const labelH = 21;
+    const anchorY = Math.round(labelH + size / 2);
+    const totalH = Math.round(labelH + size);
+
     const posIcon = L.divIcon({
       html: posHtml,
       className: 'empty-icon',
-      iconSize: [140, size + 20],
-      iconAnchor: [70, size + 20]
+      iconSize: [140, totalH],
+      iconAnchor: [70, anchorY]
     });
 
     const marker = L.marker([wp.lat, wp.lng], { 
@@ -1007,10 +1020,6 @@ function updateInspectorPanel(mountain, basecamp) {
     statusBadge.className = 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-error-container text-on-error-container font-headline text-[10px] font-bold';
     statusBadge.innerHTML = `<span class="material-symbols-outlined text-[12px]">lock</span> JALUR DITUTUP SEMENTARA`;
   }
-
-  // Type
-  const typeEl = document.getElementById('inspector-type');
-  if (typeEl) typeEl.innerText = mountain.tipeGunung || 'GUNUNG PENDAKIAN';
 
   // Render Jalur Pills with distance KM and pos count
   const jalurPillsContainer = document.getElementById('inspector-jalur-pills');
@@ -1318,6 +1327,62 @@ function pickCoordinateForPoint(type, id, name) {
   activeCoordTarget = { type, id: String(id), name };
   switchView('map');
   showToast(`Silakan KLIK pada peta untuk menentukan koordinat ${name}`, 'info');
+}
+
+/**
+ * Selaraskan & rapikan posisi titik pos di antara Basecamp dan Puncak secara otomatis
+ * Menghasilkan kurva jalur yang mulus, bertingkat, dan selaras dengan titik pos
+ */
+function autoAlignTrailCoordinates() {
+  const m = selectedMountain;
+  const bc = selectedBasecamp;
+  if (!m || !bc || !editingWaypoints || editingWaypoints.length < 2) {
+    showToast('Pilih gunung dan jalur via terlebih dahulu', 'warning');
+    return;
+  }
+
+  const bcWp = editingWaypoints.find(w => w.type === 'basecamp') || editingWaypoints[0];
+  const lastWp = editingWaypoints[editingWaypoints.length - 1];
+  const peakLat = m.latitude || lastWp.lat;
+  const peakLng = m.longitude || lastWp.lng;
+  const bcLat = bcWp.lat;
+  const bcLng = bcWp.lng;
+
+  const deltaLat = peakLat - bcLat;
+  const deltaLng = peakLng - bcLng;
+  const len = Math.sqrt(deltaLat * deltaLat + deltaLng * deltaLng);
+  if (len === 0) return;
+
+  const normLat = -deltaLng / len;
+  const normLng = deltaLat / len;
+  const curveAmp = 0.07 * len;
+
+  const posWps = editingWaypoints.filter(w => w.type === 'pos');
+  const count = posWps.length;
+
+  posWps.forEach((wp, idx) => {
+    const t = (idx + 1) / (count + 1);
+    const offset = Math.sin(Math.PI * t) * curveAmp + Math.sin(2 * Math.PI * t) * (curveAmp * 0.3);
+    const newLat = Number((bcLat + t * deltaLat + offset * normLat).toFixed(6));
+    const newLng = Number((bcLng + t * deltaLng + offset * normLng).toFixed(6));
+
+    wp.lat = newLat;
+    wp.lng = newLng;
+
+    const rowLat = document.getElementById(`coord-lat-pos-${wp.rawId}`);
+    const rowLng = document.getElementById(`coord-lng-pos-${wp.rawId}`);
+    if (rowLat) rowLat.value = newLat;
+    if (rowLng) rowLng.value = newLng;
+
+    const marker = markerInstances[wp.id];
+    if (marker) {
+      marker.setLatLng([newLat, newLng]);
+    }
+  });
+
+  updateLivePolyline();
+  updateCoordEditorDistance();
+  showToast('✨ Seluruh titik pos berhasil dirapikan & diselaraskan secara proporsional!', 'success');
 }
 
 function resetCoordEditor() {
@@ -2024,7 +2089,6 @@ function openGunungModal(id = null) {
       document.getElementById('form-gunung-provinsi').value = m.provinsi;
       document.getElementById('form-gunung-kabupaten').value = m.kabupaten;
       document.getElementById('form-gunung-status').value = m.statusJalur || 'Buka';
-      document.getElementById('form-gunung-tipe').value = m.tipeGunung || 'Pegunungan Jawa';
       document.getElementById('form-gunung-deskripsi').value = m.deskripsi || '';
       document.getElementById('form-gunung-lat').value = m.latitude || '';
       document.getElementById('form-gunung-lng').value = m.longitude || '';
@@ -2061,7 +2125,6 @@ async function submitGunungForm(e) {
     provinsi: document.getElementById('form-gunung-provinsi').value,
     kabupaten: document.getElementById('form-gunung-kabupaten').value,
     statusJalur: document.getElementById('form-gunung-status').value,
-    tipeGunung: document.getElementById('form-gunung-tipe').value,
     deskripsi: document.getElementById('form-gunung-deskripsi').value,
     latitude: parseFloat(document.getElementById('form-gunung-lat').value) || undefined,
     longitude: parseFloat(document.getElementById('form-gunung-lng').value) || undefined
@@ -2944,3 +3007,719 @@ function showToast(message, type = 'info') {
 function showNotificationPanel() {
   showToast('Sistem Geospasial aktif. Pemantauan jalur resmi se-Pulau Jawa.', 'info');
 }
+
+// ============================================================================
+// 15. TRIP PLANNER & ESTIMASI WAKTU PENDAKIAN (REKOMENDASI JAM NAIK)
+// ============================================================================
+
+let plannerActiveMountain = null;
+let plannerActiveBasecamp = null;
+let plannerCalcDirection = 'arrival'; // 'arrival' ("Mau Sampai Jam Berapa") or 'departure' ("Mulai Jam Berapa")
+let plannerTimePickerValue = '05:15'; // Default sunrise 05:15 WIB
+let plannerPace = 'sedang';          // 'santai', 'sedang', 'cepat'
+let lastGeneratedTripPlan = null;
+
+/**
+ * Buka Modal Trip Planner & hitung rekomendasi otomatis
+ */
+function openTripPlannerModal(targetMountainId = null, targetBasecampId = null) {
+  // Pastikan data gunung tersedia
+  if (!allMountains || allMountains.length === 0) {
+    showToast('Memuat data gunung... Silakan tunggu sebentar', 'info');
+    loadMountains().then(() => openTripPlannerModal(targetMountainId, targetBasecampId));
+    return;
+  }
+
+  // 1. Tentukan Gunung Aktif
+  if (targetMountainId) {
+    plannerActiveMountain = allMountains.find(m => m.id === parseInt(targetMountainId, 10)) || selectedMountain || allMountains[0];
+  } else if (selectedMountain) {
+    plannerActiveMountain = selectedMountain;
+  } else {
+    plannerActiveMountain = allMountains[0];
+  }
+
+  // 2. Tentukan Jalur Via Aktif
+  if (targetBasecampId && plannerActiveMountain && plannerActiveMountain.basecamps) {
+    plannerActiveBasecamp = plannerActiveMountain.basecamps.find(b => b.id === parseInt(targetBasecampId, 10));
+  }
+  if (!plannerActiveBasecamp && plannerActiveMountain && plannerActiveMountain.basecamps && plannerActiveMountain.basecamps.length > 0) {
+    const activeBcId = selectedJalurByMountain[plannerActiveMountain.id];
+    plannerActiveBasecamp = plannerActiveMountain.basecamps.find(b => b.id === activeBcId) || plannerActiveMountain.basecamps[0];
+  }
+
+  // 3. Populate Dropdown Gunung
+  const gunungSelect = document.getElementById('planner-gunung-select');
+  if (gunungSelect && allMountains.length > 0) {
+    gunungSelect.innerHTML = allMountains.map(m => {
+      const isSelected = plannerActiveMountain && m.id === plannerActiveMountain.id;
+      const elev = m.ketinggian ? `${m.ketinggian.toLocaleString('id-ID')} mdpl` : '';
+      return `<option value="${m.id}" ${isSelected ? 'selected' : ''}>🏔️ ${m.nama} (${elev} - ${m.provinsi})</option>`;
+    }).join('');
+  }
+
+  // 4. Populate Dropdown Jalur / Via
+  updatePlannerJalurOptions();
+
+  // 5. Inisialisasi UI Nilai Waktu & Arah Kalkulasi
+  const timePicker = document.getElementById('planner-time-picker');
+  if (timePicker) {
+    timePicker.value = plannerTimePickerValue || '05:15';
+  }
+  updatePlannerDirectionUI();
+  updatePlannerPaceUI();
+
+  // 6. Tampilkan Modal Secara Tegas & Pastikan Z-Index Tertinggi
+  const modal = document.getElementById('trip-planner-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+    modal.style.zIndex = '99999';
+  }
+
+  // 7. Hitung jadwal pendakian
+  calculateAndRenderTripPlan();
+}
+
+/**
+ * Buka Trip Planner dari Menu Navigasi Topbar
+ */
+function openTripPlannerFromNav() {
+  const navModal = document.getElementById('nav-modal');
+  if (navModal && !navModal.classList.contains('hidden')) {
+    closeNavModal();
+  }
+  openTripPlannerModal();
+}
+
+/**
+ * Tutup Modal Trip Planner
+ */
+function closeTripPlannerModal() {
+  const modal = document.getElementById('trip-planner-modal');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.add('hidden');
+  }
+}
+
+/**
+ * Update opsi Jalur / Via berdasarkan gunung aktif
+ */
+function updatePlannerJalurOptions() {
+  const jalurSelect = document.getElementById('planner-jalur-select');
+  if (!jalurSelect || !plannerActiveMountain) return;
+
+  const bcs = plannerActiveMountain.basecamps || [];
+  if (bcs.length === 0) {
+    jalurSelect.innerHTML = `<option value="">Belum ada jalur terdata</option>`;
+    plannerActiveBasecamp = null;
+    return;
+  }
+
+  if (!plannerActiveBasecamp || !bcs.some(b => b.id === plannerActiveBasecamp.id)) {
+    plannerActiveBasecamp = bcs[0];
+  }
+
+  jalurSelect.innerHTML = bcs.map(b => {
+    const isSelected = plannerActiveBasecamp && b.id === plannerActiveBasecamp.id;
+    const posCount = b.pos ? b.pos.length : 0;
+    return `<option value="${b.id}" ${isSelected ? 'selected' : ''}>⛺ Via ${b.jalurVia} (${posCount} Pos · Alt: ${b.elevasi || 1500}m)</option>`;
+  }).join('');
+}
+
+/**
+ * Event Listener saat dropdown gunung diganti
+ */
+function onPlannerMountainChange(mountainId) {
+  const m = allMountains.find(item => item.id === parseInt(mountainId, 10));
+  if (!m) return;
+  plannerActiveMountain = m;
+  updatePlannerJalurOptions();
+  calculateAndRenderTripPlan();
+}
+
+/**
+ * Event Listener saat dropdown jalur diganti
+ */
+function onPlannerJalurChange(basecampId) {
+  if (!plannerActiveMountain || !plannerActiveMountain.basecamps) return;
+  const bc = plannerActiveMountain.basecamps.find(b => b.id === parseInt(basecampId, 10));
+  if (!bc) return;
+  plannerActiveBasecamp = bc;
+  calculateAndRenderTripPlan();
+}
+
+/**
+ * Mode Kalkulator: Target Tiba di Puncak ("Mau Sampai Jam Berapa" ➔ "Harus Naik Jam Berapa")
+ */
+function setPlannerCalcDirection(direction = 'arrival') {
+  plannerCalcDirection = 'arrival';
+  updatePlannerDirectionUI();
+  calculateAndRenderTripPlan();
+}
+
+function updatePlannerDirectionUI() {
+  const inputLabel = document.getElementById('planner-input-time-label');
+  if (inputLabel) {
+    inputLabel.innerHTML = `
+      <span class="material-symbols-outlined text-[16px] text-secondary">alarm</span>
+      <span>Target Tiba di Puncak Pukul:</span>
+    `;
+  }
+}
+
+/**
+ * Pilihan Cepat Jam Target (05:15 Sunrise, 08:30 Pagi, 12:00 Siang, 17:15 Sunset)
+ */
+function setQuickPresetTime(timeStr) {
+  plannerTimePickerValue = timeStr;
+  const timePicker = document.getElementById('planner-time-picker');
+  if (timePicker) timePicker.value = timeStr;
+
+  // Highlight preset button yang aktif
+  document.querySelectorAll('.preset-time-btn').forEach(btn => {
+    if (btn.innerText.includes(timeStr)) {
+      btn.className = 'preset-time-btn px-2 py-2 rounded-xl border border-primary bg-primary/10 text-primary transition-all text-center flex flex-col items-center shadow-xs ring-1 ring-primary';
+    } else {
+      btn.className = 'preset-time-btn px-2 py-2 rounded-xl border border-surface-container bg-surface-container-low hover:bg-primary hover:text-white transition-all text-center flex flex-col items-center';
+    }
+  });
+
+  calculateAndRenderTripPlan();
+}
+
+/**
+ * Event Listener saat input time picker diganti manual
+ */
+function onPlannerTimePickerChange(val) {
+  if (val) {
+    plannerTimePickerValue = val;
+    calculateAndRenderTripPlan();
+  }
+}
+
+/**
+ * Ganti Ritme / Kecepatan Berjalan Pendaki (Santai, Sedang, Cepat)
+ */
+function setPlannerPace(pace, recalculate = true) {
+  plannerPace = pace;
+  updatePlannerPaceUI();
+  if (recalculate) {
+    calculateAndRenderTripPlan();
+  }
+}
+
+function updatePlannerPaceUI() {
+  document.querySelectorAll('.planner-pace-btn').forEach(btn => {
+    const p = btn.dataset.pace;
+    if (p === plannerPace) {
+      btn.className = 'planner-pace-btn p-2.5 rounded-xl border-2 border-primary bg-primary-container/20 text-left transition-all flex items-center gap-2 shadow-sm ring-1 ring-primary';
+    } else {
+      btn.className = 'planner-pace-btn p-2.5 rounded-xl border border-surface-container bg-surface-container-low hover:bg-surface-container text-left transition-all flex items-center gap-2';
+    }
+  });
+}
+
+/**
+ * Hitung & Render Rencana Perjalanan Trip Planner
+ * Memanggil API backend `/api/trip-planner/:basecampId` dengan fallback perhitungan lokal offline
+ */
+async function calculateAndRenderTripPlan() {
+  if (!plannerActiveBasecamp) {
+    renderEmptyTripPlan();
+    return;
+  }
+
+  try {
+    const timeVal = plannerTimePickerValue || '05:15';
+    const url = `/api/trip-planner/${plannerActiveBasecamp.id}?calcDirection=arrival&targetArrivalTime=${encodeURIComponent(timeVal)}&pace=${encodeURIComponent(plannerPace)}`;
+    
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    const json = await res.json();
+    if (json.success && json.data) {
+      lastGeneratedTripPlan = json.data;
+      renderTripPlanUI(json.data);
+      return;
+    }
+    throw new Error(json.message || 'Gagal memuat trip plan dari server');
+  } catch (err) {
+    console.warn('Trip Planner API fallback ke kalkulasi lokal:', err);
+    const localPlan = calculateLocalTripPlan(plannerActiveMountain, plannerActiveBasecamp, 'arrival', plannerPace, plannerTimePickerValue);
+    lastGeneratedTripPlan = localPlan;
+    renderTripPlanUI(localPlan);
+  }
+}
+
+/**
+ * Render Data Rencana Perjalanan ke DOM
+ */
+function renderTripPlanUI(plan) {
+  if (!plan) return;
+
+  const rec = plan.recommendation || {};
+  const metrics = plan.metrics || {};
+  const timeline = plan.timeline || [];
+  const safety = plan.safetyAdvice || [];
+
+  // 1. Rekomendasi Banner
+  const recBadgeEl = document.getElementById('planner-rec-badge');
+  const recActionLabel = document.getElementById('planner-rec-action-label');
+  const recTimeEl = document.getElementById('planner-rec-time');
+  const recReasonEl = document.getElementById('planner-rec-reason');
+  const recTargetLabel = document.getElementById('planner-rec-target-label');
+  const recPeakEl = document.getElementById('planner-rec-peak-time');
+  const recAscentDurationEl = document.getElementById('planner-rec-ascent-duration');
+  const recIconEl = document.getElementById('planner-rec-icon');
+
+  if (recBadgeEl) {
+    recBadgeEl.innerText = rec.title || 'ESTIMASI JADWAL KEBERANGKATAN RESMI:';
+  }
+  if (recActionLabel) {
+    recActionLabel.innerText = rec.actionLabel || 'Anda Harus Mulai Naik dari Basecamp:';
+  }
+  if (recTimeEl) {
+    recTimeEl.innerText = rec.recommendedStartTime || '--:-- WIB';
+  }
+  if (recReasonEl) {
+    recReasonEl.innerText = rec.reason || '';
+  }
+  if (recTargetLabel) {
+    recTargetLabel.innerText = rec.targetLabel || 'Estimasi Kembali di Basecamp';
+  }
+  if (recPeakEl) {
+    recPeakEl.innerText = rec.rightTime || rec.returnBasecampTime || rec.targetPeakTime || '--:-- WIB';
+  }
+  if (recAscentDurationEl) {
+    recAscentDurationEl.innerText = rec.rightDuration || (metrics.totalRoundtripFormatted ? `Total PP: ~${metrics.totalRoundtripFormatted}` : `Durasi Naik: ${metrics.totalAscentFormatted || '~'}`);
+  }
+
+  if (recIconEl) {
+    recIconEl.innerText = 'wb_twilight';
+  }
+
+  // 2. 4 Kartu Metrik
+  const ascEl = document.getElementById('planner-metric-ascent');
+  const descEl = document.getElementById('planner-metric-descent');
+  const totalEl = document.getElementById('planner-metric-total');
+  const distEl = document.getElementById('planner-metric-dist');
+  const gainEl = document.getElementById('planner-metric-gain');
+
+  if (ascEl) ascEl.innerText = metrics.totalAscentFormatted || '-- Jam';
+  if (descEl) descEl.innerText = metrics.totalDescentFormatted || '-- Jam';
+  if (totalEl) totalEl.innerText = metrics.totalRoundtripFormatted || '-- Jam';
+  if (distEl) distEl.innerText = `${metrics.totalDistanceKm || 0} km (Naik)`;
+  if (gainEl) gainEl.innerText = `+${metrics.totalGainM || 0} m Gain · PP ${metrics.totalRoundtripDistanceKm || 0} km`;
+
+  // 3. Pos Count Badge
+  const posBadge = document.getElementById('planner-pos-count-badge');
+  if (posBadge) {
+    const totalPos = plan.basecamp ? plan.basecamp.totalPos : 0;
+    posBadge.innerText = `${totalPos} Pos Terdaftar · Ritme ${metrics.pace || 'Reguler'}`;
+  }
+
+  // 4. Milestone Timeline List
+  const timelineList = document.getElementById('planner-timeline-list');
+  if (timelineList) {
+    if (timeline.length === 0) {
+      timelineList.innerHTML = `<div class="p-4 text-center text-xs text-on-surface-variant">Belum ada titik waypoint yang terdata di jalur ini.</div>`;
+    } else {
+      timelineList.innerHTML = timeline.map((item, index) => {
+        let typeBadge = '';
+        let dotColor = 'bg-primary';
+        let iconName = 'adjust';
+        let cardBg = 'bg-surface-container-low';
+
+        if (item.type === 'start') {
+          typeBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">TITIK START</span>';
+          dotColor = 'bg-primary';
+          iconName = 'holiday_village';
+          cardBg = 'bg-primary-container/10 border-primary/30';
+        } else if (item.type === 'summit') {
+          typeBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">PUNCAK GUNUNG</span>';
+          dotColor = 'bg-amber-500';
+          iconName = 'trophy';
+          cardBg = 'bg-amber-500/10 border-amber-500/30';
+        } else if (item.type === 'descent') {
+          typeBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-secondary/10 text-secondary">PERJALANAN TURUN</span>';
+          dotColor = 'bg-secondary';
+          iconName = 'south';
+        } else if (item.type === 'finish') {
+          typeBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-500/20 text-green-700 dark:text-green-300">FINISH BASECAMP</span>';
+          dotColor = 'bg-green-600';
+          iconName = 'check_circle';
+          cardBg = 'bg-green-500/10 border-green-500/30';
+        } else {
+          typeBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-surface-container text-on-surface-variant">POS PENDAKIAN</span>`;
+          dotColor = 'bg-secondary';
+          iconName = 'pin_drop';
+        }
+
+        const elevStr = item.elevasi ? `${item.elevasi.toLocaleString('id-ID')} mdpl` : '';
+
+        return `
+          <div class="relative flex items-start gap-3 p-3 rounded-xl border border-surface-container ${cardBg} transition-all">
+            <!-- Clock Time Pill -->
+            <div class="shrink-0 text-center min-w-[70px]">
+              <span class="font-mono font-bold text-xs sm:text-sm text-primary block leading-tight">${item.time}</span>
+              ${elevStr ? `<span class="text-[9px] font-mono text-on-surface-variant block mt-0.5">${elevStr}</span>` : ''}
+            </div>
+
+            <!-- Vertical Separator & Icon -->
+            <div class="w-7 h-7 rounded-lg ${dotColor} text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+              <span class="material-symbols-outlined text-[15px]">${iconName}</span>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-2 flex-wrap mb-0.5">
+                <h5 class="font-headline font-bold text-xs sm:text-sm text-on-surface truncate">${item.pointName}</h5>
+                ${typeBadge}
+              </div>
+              <p class="text-xs text-on-surface-variant leading-snug">${item.activity}</p>
+              ${item.note ? `<p class="text-[10px] text-on-surface-variant/80 mt-1 flex items-center gap-1"><span class="material-symbols-outlined text-[12px] shrink-0">info</span> <span>${item.note}</span></p>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // 5. Safety Box
+  const safetyBox = document.getElementById('planner-safety-box');
+  if (safetyBox) {
+    if (safety.length === 0) {
+      safetyBox.innerHTML = `
+        <div class="flex items-center gap-2 text-xs text-on-surface-variant">
+          <span class="material-symbols-outlined text-[18px] text-primary">verified</span>
+          <span>Jalur resmi terverifikasi. Selalu gunakan perlengkapan standar keamanan mendaki gunung.</span>
+        </div>
+      `;
+    } else {
+      safetyBox.innerHTML = `
+        <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant tracking-wider flex items-center gap-1 mb-1">
+          <span class="material-symbols-outlined text-[15px] text-amber-600">health_and_safety</span>
+          <span>Peringatan Keamanan & Checklist Logistik:</span>
+        </span>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          ${safety.map(s => {
+            const isWarn = s.level === 'warning';
+            const bgClass = isWarn ? 'bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200' : 'bg-surface-container-lowest border-surface-container text-on-surface';
+            return `
+              <div class="p-2.5 rounded-xl border ${bgClass} flex items-start gap-2">
+                <span class="material-symbols-outlined text-[18px] ${isWarn ? 'text-amber-600' : 'text-primary'} shrink-0 mt-0.5">${s.icon || 'info'}</span>
+                <div>
+                  <span class="font-headline font-bold text-xs block leading-tight">${s.title}</span>
+                  <span class="text-[11px] text-on-surface-variant block mt-0.5 leading-snug">${s.desc}</span>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+  }
+}
+
+function renderEmptyTripPlan() {
+  const recTimeEl = document.getElementById('planner-rec-time');
+  if (recTimeEl) recTimeEl.innerText = '--:-- WIB';
+  const recReasonEl = document.getElementById('planner-rec-reason');
+  if (recReasonEl) recReasonEl.innerText = 'Pilih gunung dan jalur untuk melihat jadwal estimasi pendakian.';
+  const timelineList = document.getElementById('planner-timeline-list');
+  if (timelineList) timelineList.innerHTML = `<div class="p-6 text-center text-xs text-on-surface-variant">Tidak ada jalur pendakian yang dipilih.</div>`;
+}
+
+/**
+ * Fallback Kalkulasi Lokal Cepat jika API Server Lambat / Offline
+ */
+function calculateLocalTripPlan(mountain, basecamp, direction, pace, timeStr) {
+  if (!mountain || !basecamp) return null;
+  const waypoints = getExpeditionWaypoints(mountain, basecamp);
+  const segments = [];
+  let totalDistanceM = 0;
+  let totalGainM = 0;
+
+  const paceMap = {
+    santai: { flatSpeed: 2.0, climbSpeed: 250, restMinutes: 15, peakStayMinutes: 45, label: 'Santai / Pemula' },
+    sedang: { flatSpeed: 2.8, climbSpeed: 380, restMinutes: 10, peakStayMinutes: 45, label: 'Sedang / Reguler' },
+    cepat:  { flatSpeed: 4.0, climbSpeed: 550, restMinutes: 5,  peakStayMinutes: 30, label: 'Cepat / Trail Runner' }
+  };
+  const paceConfig = paceMap[pace] || paceMap.sedang;
+
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const from = waypoints[i];
+    const to = waypoints[i + 1];
+    const distM = calculateHaversineMeters(from.lat, from.lng, to.lat, to.lng);
+    const elevDiff = (to.elev || 0) - (from.elev || 0);
+    const gainM = Math.max(0, elevDiff);
+
+    totalDistanceM += distM;
+    totalGainM += gainM;
+
+    const flatMins = (distM / 1000) / paceConfig.flatSpeed * 60;
+    const climbMins = (gainM / paceConfig.climbSpeed) * 60;
+    const walkMins = Math.round(Math.max(12, flatMins + climbMins));
+    const restMins = (i === waypoints.length - 2) ? 0 : paceConfig.restMinutes;
+
+    segments.push({
+      stepNumber: i + 1,
+      fromName: from.name,
+      toName: to.name,
+      toElev: to.elev,
+      distanceKm: Number((distM / 1000).toFixed(2)),
+      gainM,
+      walkMinutes: walkMins,
+      restMinutes: restMins,
+      adaAir: to.adaAir,
+      areaCamp: to.areaCamp
+    });
+  }
+
+  const totalAscentMinutes = segments.reduce((sum, s) => sum + s.walkMinutes + s.restMinutes, 0);
+  const totalDescentMinutes = Math.round(totalAscentMinutes * 0.58);
+  const totalRoundtripMinutes = totalAscentMinutes + paceConfig.peakStayMinutes + totalDescentMinutes;
+
+  function parseClock(s) {
+    const parts = String(s || '07:00').replace(' WIB', '').trim().split(':');
+    return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+  }
+  function addMinutes(start, mins) {
+    let t = (start + mins + 2880) % 1440;
+    const h = String(Math.floor(t / 60)).padStart(2, '0');
+    const m = String(t % 60).padStart(2, '0');
+    return `${h}:${m} WIB`;
+  }
+  function formatMins(m) {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    if (h === 0) return `${min} Menit`;
+    if (min === 0) return `${h} Jam`;
+    return `${h} Jam ${min} Menit`;
+  }
+
+  let startMinutes = 0;
+  let recommendation = {};
+
+  if (direction !== 'departure') {
+    const targetMins = parseClock(timeStr || '05:15');
+    startMinutes = (targetMins - totalAscentMinutes + 1440) % 1440;
+    const targetFormatted = addMinutes(targetMins, 0);
+    const startFormatted = addMinutes(startMinutes, 0);
+    const finishMins = (startMinutes + totalRoundtripMinutes) % 1440;
+    const finishFormatted = addMinutes(finishMins, 0);
+    recommendation = {
+      mode: 'target_arrival',
+      calcDirection: 'arrival',
+      title: 'REKOMENDASI JADWAL KEBERANGKATAN RESMI:',
+      recommendedStartTime: startFormatted,
+      targetPeakTime: targetFormatted,
+      returnBasecampTime: finishFormatted,
+      totalAscentDuration: formatMins(totalAscentMinutes),
+      totalRoundtripDuration: formatMins(totalRoundtripMinutes),
+      actionLabel: 'Anda Harus Mulai Naik dari Basecamp:',
+      targetLabel: 'Estimasi Kembali di Basecamp',
+      rightTime: finishFormatted,
+      rightDuration: `Total PP: ~${formatMins(totalRoundtripMinutes)}`,
+      reason: `Untuk tiba di Puncak tepat pukul ${targetFormatted}, Anda HARUS mulai mendaki dari Basecamp paling lambat pukul ${startFormatted} (estimasi waktu tempuh naik ${formatMins(totalAscentMinutes)} pada ritme ${paceConfig.label}). Estimasi tiba kembali di Basecamp pukul ${finishFormatted}.`
+    };
+  } else {
+    startMinutes = parseClock(timeStr || '07:00');
+    const peakMins = (startMinutes + totalAscentMinutes) % 1440;
+    const finishMins = (startMinutes + totalRoundtripMinutes) % 1440;
+    const startFormatted = addMinutes(startMinutes, 0);
+    const peakFormatted = addMinutes(peakMins, 0);
+    recommendation = {
+      mode: 'target_departure',
+      calcDirection: 'departure',
+      title: `🚀 Mulai Naik dari Basecamp Pukul ${startFormatted}`,
+      recommendedStartTime: startFormatted,
+      targetPeakTime: peakFormatted,
+      returnBasecampTime: addMinutes(finishMins, 0),
+      totalAscentDuration: formatMins(totalAscentMinutes),
+      actionLabel: 'Mulai Naik dari Basecamp:',
+      targetLabel: 'Estimasi Tiba di Puncak',
+      reason: `Jika Anda mulai naik dari Basecamp pukul ${startFormatted}, Anda diperkirakan tiba di Puncak pukul ${peakFormatted} dan kembali ke Basecamp pukul ${addMinutes(finishMins, 0)} (durasi naik ${formatMins(totalAscentMinutes)}).`
+    };
+  }
+
+  // Timeline
+  let curMins = startMinutes;
+  const timeline = [];
+  timeline.push({
+    time: addMinutes(curMins, 0),
+    pointName: basecamp.nama,
+    type: 'start',
+    elevasi: basecamp.elevasi || 1500,
+    activity: 'Mulai Keberangkatan dari Basecamp (Start Hiking)',
+    note: 'Registrasi simaksi, doa bersama, cek perbekalan air.'
+  });
+
+  segments.forEach((seg, i) => {
+    curMins += seg.walkMinutes;
+    const isPeak = (i === segments.length - 1);
+    if (isPeak) {
+      timeline.push({
+        time: addMinutes(curMins, 0),
+        pointName: seg.toName,
+        type: 'summit',
+        elevasi: seg.toElev,
+        activity: '🎉 Tiba di Titik Puncak!',
+        note: `Total tanjakan +${totalGainM}m berhasil ditempuh. Istirahat ${paceConfig.peakStayMinutes} menit.`
+      });
+      curMins += paceConfig.peakStayMinutes;
+    } else {
+      timeline.push({
+        time: addMinutes(curMins, 0),
+        pointName: seg.toName,
+        type: 'pos',
+        elevasi: seg.toElev,
+        activity: `Tiba di ${seg.toName} · Istirahat ${seg.restMinutes} Menit`,
+        note: `${seg.adaAir ? '💧 Ada air. ' : ''}${seg.areaCamp ? '⛺ Area camp. ' : ''}+${seg.distanceKm} km (+${seg.gainM}m).`
+      });
+      curMins += seg.restMinutes;
+    }
+  });
+
+  const descentStart = curMins;
+  curMins += totalDescentMinutes;
+  timeline.push({
+    time: addMinutes(descentStart, 0),
+    pointName: 'Mulai Perjalanan Turun',
+    type: 'descent',
+    activity: 'Turun kembali menuju Basecamp',
+    note: 'Gunakan trekking pole dan waspada trek licin.'
+  });
+  timeline.push({
+    time: addMinutes(curMins, 0),
+    pointName: basecamp.nama,
+    type: 'finish',
+    elevasi: basecamp.elevasi || 1500,
+    activity: '🏁 Tiba Kembali di Basecamp (Finish)',
+    note: 'Lapor kembali ke pos registrasi basecamp dan istirahat.'
+  });
+
+  const safetyAdvice = [
+    {
+      level: 'info',
+      icon: 'water_drop',
+      title: 'Kebutuhan Air Minum',
+      desc: `Estimasi kebutuhan air: Minimal 2.5 - 3.5 Liter per pendaki. ${basecamp.pos && basecamp.pos.some(p => p.adaAir) ? 'Ada pos sumber air di jalur ini.' : 'Jalur ini minim sumber air, bawa air cukup dari basecamp.'}`
+    }
+  ];
+
+  return {
+    mountain: { id: mountain.id, nama: mountain.nama, ketinggian: mountain.ketinggian },
+    basecamp: { id: basecamp.id, nama: basecamp.nama, jalurVia: basecamp.jalurVia, totalPos: basecamp.pos ? basecamp.pos.length : 0 },
+    recommendation,
+    metrics: {
+      pace: paceConfig.label,
+      totalDistanceKm: Number((totalDistanceM / 1000).toFixed(2)),
+      totalRoundtripDistanceKm: Number(((totalDistanceM * 2) / 1000).toFixed(2)),
+      totalGainM,
+      totalAscentMinutes,
+      totalAscentFormatted: formatMins(totalAscentMinutes),
+      totalDescentMinutes,
+      totalDescentFormatted: formatMins(totalDescentMinutes),
+      totalRoundtripMinutes,
+      totalRoundtripFormatted: formatMins(totalRoundtripMinutes)
+    },
+    timeline,
+    safetyAdvice
+  };
+}
+
+/**
+ * Salin Jadwal Trip Planner ke Clipboard (Format Siap Kirim WhatsApp)
+ */
+function copyTripPlanToClipboard() {
+  if (!lastGeneratedTripPlan) {
+    showToast('Belum ada jadwal yang dihitung', 'error');
+    return;
+  }
+
+  const p = lastGeneratedTripPlan;
+  const m = p.mountain || {};
+  const bc = p.basecamp || {};
+  const rec = p.recommendation || {};
+  const met = p.metrics || {};
+  const tl = p.timeline || [];
+
+  let text = `🏔️ *TRIP PLANNER PENDAKIAN: ${(m.nama || '').toUpperCase()}*\n`;
+  text += `📍 Jalur: Via ${bc.jalurVia || '-'} (${bc.nama || '-'})\n`;
+  text += `🎯 Target / Mode: ${rec.title || 'Estimasi Waktu'}\n`;
+  text += `🚶 Ritme: ${met.pace || 'Reguler'}\n\n`;
+
+  text += `⏱️ *ESTIMASI WAKTU:* \n`;
+  text += `• Rekomendasi Start: *${rec.recommendedStartTime || '-'}*\n`;
+  text += `• Target Puncak: *${rec.targetPeakTime || '-'}*\n`;
+  text += `• Durasi Naik: ${met.totalAscentFormatted || '-'}\n`;
+  text += `• Durasi Turun: ${met.totalDescentFormatted || '-'}\n`;
+  text += `• Total Durasi PP: ${met.totalRoundtripFormatted || '-'}\n`;
+  text += `• Jarak Naik: ${met.totalDistanceKm || '-'} km (+${met.totalGainM || 0}m elevation gain)\n\n`;
+
+  text += `📋 *ITINERARY JADWAL PER POS:* \n`;
+  tl.forEach(item => {
+    text += `⏰ *${item.time}* - ${item.pointName}\n   ↳ ${item.activity}\n`;
+  });
+
+  text += `\n⚠️ *TIPS & KESELAMATAN:*\n`;
+  text += `• Bawa air minimal 2.5 - 3.5L per orang.\n`;
+  text += `• Siapkan headlamp dengan baterai cadangan.\n`;
+  text += `• Bawa jas hujan, jaket windproof, dan survival kit.\n`;
+  text += `\n_Dibuat otomatis oleh KANIMAP Expedition GIS System_`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('📋 Jadwal berhasil disalin! Siap dipaste ke WhatsApp.', 'success');
+    }).catch(err => {
+      fallbackCopyText(text);
+    });
+  } else {
+    fallbackCopyText(text);
+  }
+}
+
+function fallbackCopyText(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    showToast('📋 Jadwal berhasil disalin! Siap dipaste ke WhatsApp.', 'success');
+  } catch (err) {
+    showToast('Gagal menyalin jadwal.', 'error');
+  }
+  document.body.removeChild(ta);
+}
+
+/**
+ * Tampilkan Jalur yang dipilih di Peta Utama
+ */
+function showTripPlanOnMap() {
+  if (!plannerActiveMountain || !plannerActiveBasecamp) return;
+
+  closeTripPlannerModal();
+
+  // Aktifkan gunung dan jalur di peta
+  selectMountain(plannerActiveMountain.id, true);
+  switchJalur(plannerActiveMountain.id, plannerActiveBasecamp.id);
+
+  showToast(`🗺️ Menampilkan rute ${plannerActiveMountain.nama} via ${plannerActiveBasecamp.jalurVia} di peta.`, 'success');
+}
+
+// Global Keyboard Shortcut: ESC untuk menutup modal Trip Planner
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const modal = document.getElementById('trip-planner-modal');
+    if (modal && modal.style.display === 'flex') {
+      closeTripPlannerModal();
+    }
+  }
+});
+
+
