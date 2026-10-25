@@ -1111,18 +1111,25 @@ const getTripPlan = async (req, res) => {
 
       const targetTimeFormatted = addMinutesToTime(targetArrivalMins, 0);
       const startTimeFormatted = addMinutesToTime(startMinutes, 0);
+      const finishMins = (startMinutes + totalRoundtripMinutes) % 1440;
+      const finishTimeFormatted = addMinutesToTime(finishMins, 0);
       const ascentDurationFormatted = formatDurationMins(totalAscentMinutes);
+      const roundtripDurationFormatted = formatDurationMins(totalRoundtripMinutes);
 
       recommendation = {
         mode: mode === 'sunrise' ? 'sunrise' : 'target_arrival',
         calcDirection: 'arrival',
-        title: `🎯 Target Tiba di Puncak Pukul ${targetTimeFormatted}`,
+        title: 'REKOMENDASI JADWAL KEBERANGKATAN RESMI:',
         targetPeakTime: targetTimeFormatted,
         recommendedStartTime: startTimeFormatted,
+        returnBasecampTime: finishTimeFormatted,
         totalAscentDuration: ascentDurationFormatted,
+        totalRoundtripDuration: roundtripDurationFormatted,
         actionLabel: 'Anda Harus Mulai Naik dari Basecamp:',
-        targetLabel: 'Target Tiba di Puncak',
-        reason: `Untuk tiba di Puncak tepat pukul ${targetTimeFormatted}, Anda HARUS mulai mendaki dari Basecamp paling lambat pukul ${startTimeFormatted} (estimasi waktu tempuh naik ${ascentDurationFormatted} pada ritme ${paceConfig.label}).`
+        targetLabel: 'Estimasi Kembali di Basecamp',
+        rightTime: finishTimeFormatted,
+        rightDuration: `Total PP: ~${roundtripDurationFormatted}`,
+        reason: `Untuk tiba di Puncak tepat pukul ${targetTimeFormatted}, Anda HARUS mulai mendaki dari Basecamp paling lambat pukul ${startTimeFormatted} (estimasi waktu tempuh naik ${ascentDurationFormatted} pada ritme ${paceConfig.label}). Estimasi tiba kembali di Basecamp pukul ${finishTimeFormatted}.`
       };
     } else if (calcDirection === 'departure' || mode === 'target_departure' || mode === 'custom') {
       // User says: "Saya mau mulai naik jam segini -> Sampai puncak jam berapa?"

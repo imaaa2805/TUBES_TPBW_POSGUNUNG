@@ -3292,13 +3292,13 @@ function renderTripPlanUI(plan) {
     recReasonEl.innerText = rec.reason || '';
   }
   if (recTargetLabel) {
-    recTargetLabel.innerText = rec.targetLabel || 'Target Tiba di Puncak';
+    recTargetLabel.innerText = rec.targetLabel || 'Estimasi Kembali di Basecamp';
   }
   if (recPeakEl) {
-    recPeakEl.innerText = rec.targetPeakTime || '--:-- WIB';
+    recPeakEl.innerText = rec.rightTime || rec.returnBasecampTime || rec.targetPeakTime || '--:-- WIB';
   }
   if (recAscentDurationEl) {
-    recAscentDurationEl.innerText = `Durasi Naik: ${metrics.totalAscentFormatted || rec.totalAscentDuration || '~'}`;
+    recAscentDurationEl.innerText = rec.rightDuration || (metrics.totalRoundtripFormatted ? `Total PP: ~${metrics.totalRoundtripFormatted}` : `Durasi Naik: ${metrics.totalAscentFormatted || '~'}`);
   }
 
   if (recIconEl) {
@@ -3513,16 +3513,22 @@ function calculateLocalTripPlan(mountain, basecamp, direction, pace, timeStr) {
     startMinutes = (targetMins - totalAscentMinutes + 1440) % 1440;
     const targetFormatted = addMinutes(targetMins, 0);
     const startFormatted = addMinutes(startMinutes, 0);
+    const finishMins = (startMinutes + totalRoundtripMinutes) % 1440;
+    const finishFormatted = addMinutes(finishMins, 0);
     recommendation = {
       mode: 'target_arrival',
       calcDirection: 'arrival',
-      title: `🎯 Target Tiba di Puncak Pukul ${targetFormatted}`,
+      title: 'REKOMENDASI JADWAL KEBERANGKATAN RESMI:',
       recommendedStartTime: startFormatted,
       targetPeakTime: targetFormatted,
+      returnBasecampTime: finishFormatted,
       totalAscentDuration: formatMins(totalAscentMinutes),
+      totalRoundtripDuration: formatMins(totalRoundtripMinutes),
       actionLabel: 'Anda Harus Mulai Naik dari Basecamp:',
-      targetLabel: 'Target Tiba di Puncak',
-      reason: `Untuk tiba di Puncak tepat pukul ${targetFormatted}, Anda HARUS mulai mendaki dari Basecamp paling lambat pukul ${startFormatted} (estimasi waktu tempuh naik ${formatMins(totalAscentMinutes)} pada ritme ${paceConfig.label}).`
+      targetLabel: 'Estimasi Kembali di Basecamp',
+      rightTime: finishFormatted,
+      rightDuration: `Total PP: ~${formatMins(totalRoundtripMinutes)}`,
+      reason: `Untuk tiba di Puncak tepat pukul ${targetFormatted}, Anda HARUS mulai mendaki dari Basecamp paling lambat pukul ${startFormatted} (estimasi waktu tempuh naik ${formatMins(totalAscentMinutes)} pada ritme ${paceConfig.label}). Estimasi tiba kembali di Basecamp pukul ${finishFormatted}.`
     };
   } else {
     startMinutes = parseClock(timeStr || '07:00');
