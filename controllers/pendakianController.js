@@ -1225,7 +1225,7 @@ const getTripPlan = async (req, res) => {
           type: 'pos',
           elevasi: seg.toElev,
           activity: `Tiba di ${seg.toName} · Istirahat ${seg.restMinutes} Menit`,
-          note: `${seg.adaAir ? '💧 Sumber air tersedia. ' : ''}${seg.areaCamp ? '⛺ Area camp pendaki. ' : ''}Jarak segmen +${seg.distanceKm} km (+${seg.gainM}m).`
+          note: `${seg.adaAir ? '💧 Sumber air tersedia. ' : ''}${seg.areaCamp ? '⛺ Area camp pendaki. ' : ''}Elevasi pos ${seg.toElev ? seg.toElev.toLocaleString('id-ID') : '-'} mdpl (Tanjakan +${seg.gainM} mdpl).`
         });
         currentMins += seg.restMinutes;
       }

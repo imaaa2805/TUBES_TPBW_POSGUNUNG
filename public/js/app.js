@@ -243,10 +243,9 @@ async function loadMountains() {
     renderMountainCards();
     renderMountainPins();
 
-    // Default select Merbabu or first mountain
-    const defaultMtn = allMountains.find(m => m.nama.toLowerCase().includes('merbabu')) || allMountains[0];
-    if (defaultMtn) {
-      selectMountain(defaultMtn.id, false);
+    // Tampilkan peta Pulau Jawa secara utuh tanpa langsung zoom ke satu gunung
+    if (map && REGION_BOUNDS.all) {
+      map.fitBounds(REGION_BOUNDS.all, { padding: [30, 30] });
     }
   } catch (err) {
     console.error('Gagal memuat data gunung:', err);
@@ -380,18 +379,17 @@ function renderMountainCards() {
       `;
     }
 
-    // Jalur / Via chips inside card dengan Jarak KM & Jumlah Pos
+    // Jalur / Via chips inside card dengan Elevasi MDPL & Jumlah Pos
     const jalurChipsHtml = m.basecamps.map(b => {
       const isBcActive = activeBc && activeBc.id === b.id;
-      const bWaypoints = getExpeditionWaypoints(m, b);
-      const bSummary = calculateTrailSegments(bWaypoints);
+      const bcElevStr = `${(b.elevasi || Math.round(m.ketinggian * 0.48)).toLocaleString('id-ID')} mdpl`;
       const chipClass = isBcActive 
         ? 'bg-primary text-on-primary font-bold shadow-xs ring-1 ring-primary-container' 
         : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface font-medium';
       return `
-        <span onclick="event.stopPropagation(); switchJalur(${m.id}, ${b.id});" class="px-2 py-0.5 rounded-lg text-[10px] font-headline cursor-pointer transition-all flex items-center gap-1 ${chipClass}" title="Pencet untuk melihat visualisasi ${bSummary.totalDistanceFormatted} & ${b.pos.length} pos via ${b.jalurVia}">
+        <span onclick="event.stopPropagation(); switchJalur(${m.id}, ${b.id});" class="px-2 py-0.5 rounded-lg text-[10px] font-headline cursor-pointer transition-all flex items-center gap-1 ${chipClass}" title="Pencet untuk melihat visualisasi ${bcElevStr} ➔ ${m.ketinggian.toLocaleString('id-ID')} mdpl & ${b.pos.length} pos via ${b.jalurVia}">
           <span>Via ${b.jalurVia}</span>
-          <span class="text-[9px] font-mono font-bold ${isBcActive ? 'bg-black/20 text-white' : 'bg-surface-container-highest text-on-surface-variant'} px-1 py-0.2 rounded">${bSummary.totalDistanceFormatted}</span>
+          <span class="text-[9px] font-mono font-bold ${isBcActive ? 'bg-black/20 text-white' : 'bg-surface-container-highest text-on-surface-variant'} px-1 py-0.2 rounded">${bcElevStr}</span>
           <span class="text-[9px] font-bold ${isBcActive ? 'bg-black/20 text-white' : 'bg-surface-container-highest text-on-surface-variant'} px-1 py-0.2 rounded">${b.pos.length} Pos</span>
         </span>
       `;
@@ -400,8 +398,7 @@ function renderMountainCards() {
     // Active trail preview badge if active basecamp exists
     let activeTrailBadgeHtml = '';
     if (activeBc) {
-      const activeWps = getExpeditionWaypoints(m, activeBc);
-      const activeSummary = calculateTrailSegments(activeWps);
+      const bcElev = (activeBc.elevasi || Math.round(m.ketinggian * 0.48)).toLocaleString('id-ID');
       activeTrailBadgeHtml = `
         <div class="mt-2 px-2.5 py-1 rounded-xl bg-primary/5 border border-primary/15 flex items-center justify-between text-[10px] font-headline">
           <span class="text-primary font-bold flex items-center gap-1 truncate">
@@ -409,7 +406,7 @@ function renderMountainCards() {
             Via ${activeBc.jalurVia} (BC ➔ Puncak)
           </span>
           <div class="flex items-center gap-1.5 shrink-0 font-mono">
-            <strong class="text-primary font-bold">${activeSummary.totalDistanceFormatted}</strong>
+            <strong class="text-primary font-bold">${bcElev} ➔ ${m.ketinggian.toLocaleString('id-ID')} mdpl</strong>
             <span class="text-outline-variant">•</span>
             <strong class="text-secondary font-bold">${activeBc.pos.length} Pos</strong>
           </div>
@@ -562,6 +559,12 @@ function setProvinceFilter(region) {
   const regLabel = document.getElementById('map-region-label');
   if (regLabel) regLabel.innerText = `WILAYAH: ${regionNames[region] || 'PULAU JAWA'}`;
 
+  // Bersihkan seleksi gunung & garis jalur aktif agar peta fokus menampilkan wilayah
+  selectedMountain = null;
+  selectedBasecamp = null;
+  if (trailMarkersGroup) trailMarkersGroup.clearLayers();
+  closeMapTrailSummary();
+
   // Re-render Cards and Pins (Only pins in that province will be shown!)
   renderMountainCards();
   renderMountainPins();
@@ -573,19 +576,6 @@ function setProvinceFilter(region) {
     duration: 1.2,
     easeLinearity: 0.25
   });
-
-  // Automatically select the first mountain in that province
-  const provinceMountains = allMountains.filter(m => {
-    if (region === 'jabar') return m.provinsi.toLowerCase().includes('barat');
-    if (region === 'jateng') return m.provinsi.toLowerCase().includes('tengah');
-    if (region === 'diy') return m.provinsi.toLowerCase().includes('diy');
-    if (region === 'jatim') return m.provinsi.toLowerCase().includes('timur');
-    return true;
-  });
-
-  if (provinceMountains.length > 0) {
-    selectMountain(provinceMountains[0].id, false);
-  }
 
   showToast(`Wilayah: ${regionNames[region]}`, 'info');
 }
@@ -709,7 +699,7 @@ function getExpeditionWaypoints(mountain, basecamp) {
   if (mountain.latitude && mountain.longitude) {
     const lastWp = waypoints[waypoints.length - 1];
     const distToPeak = calculateHaversineMeters(lastWp.lat, lastWp.lng, mountain.latitude, mountain.longitude);
-    if (distToPeak > 150 && !lastWp.name.toLowerCase().includes('puncak')) {
+    if (distToPeak > 150) {
       waypoints.push({
         id: `summit-${mountain.id}`,
         basecampId: basecamp.id,
@@ -722,6 +712,8 @@ function getExpeditionWaypoints(mountain, basecamp) {
         areaCamp: false,
         keterangan: `Titik tertinggi Puncak ${mountain.nama} (${mountain.ketinggian} MDPL)`
       });
+    } else if (lastWp) {
+      lastWp.type = 'summit';
     }
   }
 
@@ -733,7 +725,7 @@ function getExpeditionWaypoints(mountain, basecamp) {
  */
 function calculateTrailSegments(waypoints) {
   if (!waypoints || waypoints.length < 2) {
-    return { segments: [], totalDistanceM: 0, totalGainM: 0, totalMinutes: 0, totalDistanceFormatted: '0 km', totalGainFormatted: '+0 m', totalHoursFormatted: '0 Menit' };
+    return { segments: [], totalDistanceM: 0, totalGainM: 0, totalMinutes: 0, totalDistanceFormatted: '0 mdpl', totalGainFormatted: '+0 mdpl', totalHoursFormatted: '0 Menit' };
   }
 
   const segments = [];
@@ -763,9 +755,9 @@ function calculateTrailSegments(waypoints) {
       fromElev: from.elev,
       toElev: to.elev,
       distanceM: Math.round(distM),
-      distanceFormatted: distM >= 1000 ? `${(distM / 1000).toFixed(2)} km` : `${Math.round(distM)} m`,
+      distanceFormatted: `${(to.elev || 0).toLocaleString('id-ID')} mdpl`,
       elevGain: gainM,
-      elevGainFormatted: gainM > 0 ? `+${gainM} m` : '±0 m',
+      elevGainFormatted: gainM > 0 ? `+${gainM.toLocaleString('id-ID')} mdpl` : '±0 mdpl',
       estMinutes,
       estTimeFormatted: estMinutes >= 60 ? `${Math.floor(estMinutes / 60)}j ${estMinutes % 60}m` : `${estMinutes} mnt`,
       keterangan: to.keterangan || (to.type === 'summit' ? 'Menuju Titik Puncak' : `Pos pendakian`)
@@ -773,13 +765,14 @@ function calculateTrailSegments(waypoints) {
   }
 
   const totalMinutes = segments.reduce((acc, s) => acc + s.estMinutes, 0);
+  const peakElev = waypoints[waypoints.length - 1]?.elev || 0;
 
   return {
     segments,
     totalDistanceM: Math.round(totalDistanceM),
-    totalDistanceFormatted: `${(totalDistanceM / 1000).toFixed(2)} km`,
+    totalDistanceFormatted: `${peakElev.toLocaleString('id-ID')} mdpl`,
     totalGainM,
-    totalGainFormatted: `+${totalGainM} m`,
+    totalGainFormatted: `+${totalGainM.toLocaleString('id-ID')} mdpl`,
     totalMinutes,
     totalHoursFormatted: totalMinutes >= 60 ? `${Math.floor(totalMinutes / 60)} Jam ${totalMinutes % 60} Menit` : `${totalMinutes} Menit`
   };
@@ -836,12 +829,12 @@ function drawMountainTrail(mountain, basecamp) {
     }).addTo(trailMarkersGroup);
 
     // Tooltip on the trail line
-    const distFormatted = summary.totalDistanceFormatted;
+    const bcElevStr = (basecamp.elevasi || Math.round(mountain.ketinggian * 0.48)).toLocaleString('id-ID');
     const posCount = basecamp.pos ? basecamp.pos.length : 0;
     const tooltipHtml = `
       <div class="p-1.5 text-xs font-headline font-bold text-on-surface">
         <div class="text-primary font-bold">🏔️ ${mountain.nama} · Via ${basecamp.jalurVia}</div>
-        <div class="text-on-surface mt-0.5 font-mono">🛣️ Jarak Jalur: <strong class="text-primary">${distFormatted}</strong> (BC ➔ Puncak)</div>
+        <div class="text-on-surface mt-0.5 font-mono">⛰️ Elevasi: <strong class="text-primary">${bcElevStr} ➔ ${mountain.ketinggian.toLocaleString('id-ID')} mdpl</strong></div>
         <div class="text-secondary font-mono">📍 Jumlah Pos: <strong class="text-secondary">${posCount} Pos</strong> Pendakian</div>
         <div class="text-[10px] text-on-surface-variant font-normal mt-0.5 italic">Klik jalur untuk buka panduan langkah rute</div>
       </div>
@@ -863,16 +856,8 @@ function drawMountainTrail(mountain, basecamp) {
     }
   }
 
-  // Hitung akumulasi jarak dari Basecamp untuk setiap titik
-  let cumDistanceM = 0;
-
   waypoints.forEach((wp, idx) => {
-    if (idx > 0) {
-      const prev = waypoints[idx - 1];
-      cumDistanceM += calculateHaversineMeters(prev.lat, prev.lng, wp.lat, wp.lng);
-    }
-
-    const distFromBcFormatted = cumDistanceM >= 1000 ? `${(cumDistanceM / 1000).toFixed(2)} km` : `${Math.round(cumDistanceM)} m`;
+    const wpElevFormatted = `${(wp.elev || 1500).toLocaleString('id-ID')} mdpl`;
     let pinColor = '#059669'; // Emerald
     let innerContent = '';
     let size = 30;
@@ -882,17 +867,17 @@ function drawMountainTrail(mountain, basecamp) {
       pinColor = '#d97706'; // Amber 600
       size = 36;
       innerContent = `<span class="material-symbols-outlined text-[20px]">cottage</span>`;
-      labelPillText = `🚩 START: BC ${basecamp.jalurVia} (0.0 km)`;
+      labelPillText = `🚩 START: BC ${basecamp.jalurVia} (${wpElevFormatted})`;
     } else if (wp.type === 'summit' || idx === waypoints.length - 1) {
       pinColor = '#b91c1c'; // Red 700
       size = 38;
       innerContent = `<span class="material-symbols-outlined text-[20px]">filter_hdr</span>`;
-      labelPillText = `⛰️ FINISH: Puncak (${summary.totalDistanceFormatted})`;
+      labelPillText = `⛰️ FINISH: Puncak (${mountain.ketinggian.toLocaleString('id-ID')} mdpl)`;
     } else {
       // Pos Intermediate: display order number inside circle pin
       const orderNum = wp.urutan || idx;
       innerContent = `<span class="font-headline font-bold text-xs font-mono">${orderNum}</span>`;
-      labelPillText = `Pos ${orderNum}: ${wp.name} (${distFromBcFormatted})`;
+      labelPillText = `Pos ${orderNum}: ${wp.name} (${wpElevFormatted})`;
     }
 
     const posHtml = `
@@ -954,11 +939,12 @@ function drawMountainTrail(mountain, basecamp) {
     const isBc = wp.type === 'basecamp';
     const isSummit = wp.type === 'summit' || idx === waypoints.length - 1;
     const badgeText = isBc ? 'TITIK AWAL (BASECAMP)' : (isSummit ? 'TITIK AKHIR (PUNCAK)' : `POS #${wp.urutan || idx}`);
+    const gainFromBc = Math.max(0, (wp.elev || 1500) - (basecamp.elevasi || 1400));
     const distInfo = isBc 
-      ? `Total Jarak ke Puncak: <strong class="text-primary font-mono">${summary.totalDistanceFormatted}</strong>`
+      ? `Puncak Gunung: <strong class="text-primary font-mono">${mountain.ketinggian.toLocaleString('id-ID')} mdpl</strong>`
       : isSummit
-        ? `Total Jarak Ditempuh: <strong class="text-primary font-mono">${summary.totalDistanceFormatted}</strong>`
-        : `Jarak dari Basecamp: <strong class="text-secondary font-mono">${distFromBcFormatted}</strong>`;
+        ? `Total Tanjakan: <strong class="text-primary font-mono">${summary.totalGainFormatted}</strong>`
+        : `Tanjakan dari BC: <strong class="text-secondary font-mono">+${gainFromBc.toLocaleString('id-ID')} mdpl</strong>`;
 
     const popupHtml = `
       <div class="p-3 text-xs flex flex-col gap-1.5 min-w-[240px]">
@@ -2847,9 +2833,8 @@ function openArahRutePendakianModal() {
               <span class="font-headline font-bold text-secondary text-[11px]">${seg.estTimeFormatted}</span>
             </div>
             <div class="flex items-center gap-3 text-[11px] text-on-surface-variant font-mono mt-0.5">
-              <span>Jarak: <strong>${seg.distanceFormatted}</strong></span>
+              <span>Elevasi: <strong>${seg.toElev ? seg.toElev.toLocaleString('id-ID') : '-'} mdpl</strong></span>
               <span>Tanjakan: <strong class="text-primary">${seg.elevGainFormatted}</strong></span>
-              <span>Elevasi: ${seg.toElev} mdpl</span>
             </div>
             <p class="text-[11px] text-outline mt-1 italic">${seg.keterangan}</p>
           </div>
@@ -3309,8 +3294,10 @@ function renderTripPlanUI(plan) {
   if (ascEl) ascEl.innerText = metrics.totalAscentFormatted || '-- Jam';
   if (descEl) descEl.innerText = metrics.totalDescentFormatted || '-- Jam';
   if (totalEl) totalEl.innerText = metrics.totalRoundtripFormatted || '-- Jam';
-  if (distEl) distEl.innerText = `${metrics.totalDistanceKm || 0} km (Naik)`;
-  if (gainEl) gainEl.innerText = `+${metrics.totalGainM || 0} m Gain · PP ${metrics.totalRoundtripDistanceKm || 0} km`;
+  const peakMdpl = plan.mountain?.ketinggian || plannerActiveMountain?.ketinggian || 0;
+  const bcMdpl = plan.basecamp?.elevasi || plannerActiveBasecamp?.elevasi || 1400;
+  if (distEl) distEl.innerText = `${peakMdpl.toLocaleString('id-ID')} mdpl`;
+  if (gainEl) gainEl.innerText = `BC ${bcMdpl.toLocaleString('id-ID')} mdpl · +${(metrics.totalGainM || 0).toLocaleString('id-ID')} mdpl`;
 
   // 3. Pos Count Badge
   const posBadge = document.getElementById('planner-pos-count-badge');
@@ -3576,7 +3563,7 @@ function calculateLocalTripPlan(mountain, basecamp, direction, pace, timeStr) {
         type: 'pos',
         elevasi: seg.toElev,
         activity: `Tiba di ${seg.toName} · Istirahat ${seg.restMinutes} Menit`,
-        note: `${seg.adaAir ? '💧 Ada air. ' : ''}${seg.areaCamp ? '⛺ Area camp. ' : ''}+${seg.distanceKm} km (+${seg.gainM}m).`
+        note: `${seg.adaAir ? '💧 Ada air. ' : ''}${seg.areaCamp ? '⛺ Area camp. ' : ''}Elevasi ${seg.toElev ? seg.toElev.toLocaleString('id-ID') : '-'} mdpl (+${seg.gainM} mdpl).`
       });
       curMins += seg.restMinutes;
     }
