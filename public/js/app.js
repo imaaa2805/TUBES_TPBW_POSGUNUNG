@@ -239,14 +239,38 @@ async function loadMountains() {
     const json = await res.json();
     if (!json.success) return;
 
+    const prevMountainId = selectedMountain ? selectedMountain.id : null;
+    const prevBasecampId = selectedBasecamp ? selectedBasecamp.id : null;
+
     allMountains = json.data;
     renderMountainCards();
     renderMountainPins();
 
-    // Default select Merbabu or first mountain
-    const defaultMtn = allMountains.find(m => m.nama.toLowerCase().includes('merbabu')) || allMountains[0];
-    if (defaultMtn) {
-      selectMountain(defaultMtn.id, false);
+    if (prevMountainId && allMountains.some(m => m.id === prevMountainId)) {
+      // Pertahankan gunung yang sedang aktif dipilih agar tidak lompat ke gunung lain
+      const currentMtn = allMountains.find(m => m.id === prevMountainId);
+      selectedMountain = currentMtn;
+
+      if (prevBasecampId && currentMtn.basecamps && currentMtn.basecamps.some(b => b.id === prevBasecampId)) {
+        selectedBasecamp = currentMtn.basecamps.find(b => b.id === prevBasecampId);
+      } else if (currentMtn.basecamps && currentMtn.basecamps.length > 0) {
+        selectedBasecamp = currentMtn.basecamps[0];
+      } else {
+        selectedBasecamp = null;
+      }
+
+      if (selectedBasecamp) {
+        selectedJalurByMountain[currentMtn.id] = selectedBasecamp.id;
+        drawMountainTrail(currentMtn, selectedBasecamp);
+        updateInspectorPanel(currentMtn, selectedBasecamp);
+        updateMapTrailSummary(currentMtn, selectedBasecamp);
+      }
+    } else {
+      // Default select Merbabu atau gunung pertama (hanya jika belum ada gunung terpilih sebelumnya)
+      const defaultMtn = allMountains.find(m => m.nama.toLowerCase().includes('merbabu')) || allMountains[0];
+      if (defaultMtn) {
+        selectMountain(defaultMtn.id, false);
+      }
     }
   } catch (err) {
     console.error('Gagal memuat data gunung:', err);
@@ -886,10 +910,11 @@ function drawMountainTrail(mountain, basecamp) {
       labelPillText = `Pos ${orderNum}: ${wp.name} (${distFromBcFormatted})`;
     }
 
+    const labelOffset = Math.round(size / 2) + 5;
     const posHtml = `
       <div class="custom-geo-pin">
-        <span class="geo-pin-label">${labelPillText}</span>
-        <div style="background-color: ${pinColor}; width: ${size}px; height: ${size}px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 2.5px solid white;">
+        <span class="geo-pin-label" style="bottom: ${labelOffset}px;">${labelPillText}</span>
+        <div class="geo-pin-circle" style="background-color: ${pinColor}; width: ${size}px; height: ${size}px;">
           ${innerContent}
         </div>
       </div>
@@ -898,8 +923,9 @@ function drawMountainTrail(mountain, basecamp) {
     const posIcon = L.divIcon({
       html: posHtml,
       className: 'empty-icon',
-      iconSize: [140, size + 20],
-      iconAnchor: [70, size + 20]
+      iconSize: [0, 0],
+      iconAnchor: [0, 0],
+      popupAnchor: [0, -labelOffset - 6]
     });
 
     const marker = L.marker([wp.lat, wp.lng], { 
@@ -1585,17 +1611,36 @@ function renderDetailView() {
   const m = selectedMountain || allMountains[0];
   if (!m) return;
 
+  selectedMountain = m;
+
   document.getElementById('detail-gunung-name').innerText = m.nama;
   document.getElementById('detail-gunung-prov').innerText = `${m.provinsi} · ${m.kabupaten}`;
+
+  // Update Status badge gunung di view detail
+  const statusEl = document.getElementById('detail-gunung-status');
+  if (statusEl) {
+    const isTutup = m.statusJalur === 'Tutup' || m.statusVulkanik?.includes('Level 3') || m.statusVulkanik?.includes('Awas');
+    const isWaspada = m.statusJalur === 'Waspada' || m.statusVulkanik?.includes('Level 2');
+    if (isTutup) {
+      statusEl.className = 'px-2 py-0.5 rounded-full bg-red-100 text-red-800 font-headline text-[10px] font-bold';
+      statusEl.innerText = `${m.statusJalur.toUpperCase()} (${m.statusVulkanik})`;
+    } else if (isWaspada) {
+      statusEl.className = 'px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-headline text-[10px] font-bold';
+      statusEl.innerText = `${m.statusJalur.toUpperCase()} (${m.statusVulkanik})`;
+    } else {
+      statusEl.className = 'px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-headline text-[10px] font-bold';
+      statusEl.innerText = `${m.statusJalur.toUpperCase()} RESMI`;
+    }
+  }
 
   if (selectedBasecamp) {
     const activeWps = getExpeditionWaypoints(m, selectedBasecamp);
     const activeSummary = calculateTrailSegments(activeWps);
     document.getElementById('detail-gunung-desc').innerText = 
-      `Jalur Terpilih: Basecamp ${selectedBasecamp.nama} ➔ Puncak ${m.nama} (${m.ketinggian.toLocaleString('id-ID')} MDPL) · Jarak: ${activeSummary.totalDistanceFormatted} (BC ➔ Puncak) · Jumlah: ${selectedBasecamp.pos.length} Pos Terdata.`;
+      `Jalur Terpilih: Basecamp ${selectedBasecamp.nama} ➔ Puncak ${m.nama} (${m.ketinggian.toLocaleString('id-ID')} MDPL) · Jarak: ${activeSummary.totalDistanceFormatted} (BC ➔ Puncak) · Jumlah: ${selectedBasecamp.pos ? selectedBasecamp.pos.length : 0} Pos Terdata.`;
   } else {
     document.getElementById('detail-gunung-desc').innerText = 
-      `Ketinggian ${m.ketinggian.toLocaleString('id-ID')} MDPL · Titik pos resmi dipasangkan dengan jalur pendakian.`;
+      `Ketinggian ${m.ketinggian.toLocaleString('id-ID')} MDPL · Menampilkan seluruh jalur resmi (${m.basecamps ? m.basecamps.length : 0} Jalur).`;
   }
 
   // Gunung Selector dropdown
@@ -1604,23 +1649,29 @@ function renderDetailView() {
     gunungSelect.innerHTML = allMountains.map(g => `
       <option value="${g.id}" ${g.id === m.id ? 'selected' : ''}>${g.nama} (${g.provinsi})</option>
     `).join('');
+    gunungSelect.value = String(m.id);
   }
 
   // Jalur Selector dropdown dengan Jarak KM dan Pos
   const jalurSelect = document.getElementById('detail-jalur-select');
   if (jalurSelect) {
-    let optionsHtml = m.basecamps.map(b => {
+    let optionsHtml = (m.basecamps || []).map(b => {
       const bWaypoints = getExpeditionWaypoints(m, b);
       const bSummary = calculateTrailSegments(bWaypoints);
       return `
         <option value="${b.id}" ${selectedBasecamp && selectedBasecamp.id === b.id ? 'selected' : ''}>
-          Via ${b.jalurVia} · ${bSummary.totalDistanceFormatted} (${b.pos.length} Pos)
+          Via ${b.jalurVia} · ${bSummary.totalDistanceFormatted} (${b.pos ? b.pos.length : 0} Pos)
         </option>
       `;
     }).join('');
-    optionsHtml += `<option value="all">Tampilkan Semua Jalur (${m.basecamps.length} Jalur)</option>`;
+    optionsHtml += `<option value="all" ${!selectedBasecamp ? 'selected' : ''}>Tampilkan Semua Jalur (${m.basecamps ? m.basecamps.length : 0} Jalur)</option>`;
     jalurSelect.innerHTML = optionsHtml;
+    jalurSelect.value = selectedBasecamp ? String(selectedBasecamp.id) : 'all';
   }
+
+  // Sinkronkan toggle all pos checkbox
+  const toggleAll = document.getElementById('toggle-all-pos-mode');
+  if (toggleAll) toggleAll.checked = showAllPosMode;
 
   filterPosTable();
 }
@@ -1648,10 +1699,16 @@ function changeDetailJalur(basecampId) {
 
   if (basecampId === 'all') {
     selectedBasecamp = null;
+    document.getElementById('detail-gunung-desc').innerText = 
+      `Ketinggian ${m.ketinggian.toLocaleString('id-ID')} MDPL · Menampilkan seluruh jalur resmi (${m.basecamps ? m.basecamps.length : 0} Jalur).`;
   } else {
     selectedBasecamp = m.basecamps.find(b => b.id === parseInt(basecampId, 10)) || null;
     if (selectedBasecamp) {
       selectedJalurByMountain[m.id] = selectedBasecamp.id;
+      const activeWps = getExpeditionWaypoints(m, selectedBasecamp);
+      const activeSummary = calculateTrailSegments(activeWps);
+      document.getElementById('detail-gunung-desc').innerText = 
+        `Jalur Terpilih: Basecamp ${selectedBasecamp.nama} ➔ Puncak ${m.nama} (${m.ketinggian.toLocaleString('id-ID')} MDPL) · Jarak: ${activeSummary.totalDistanceFormatted} (BC ➔ Puncak) · Jumlah: ${selectedBasecamp.pos ? selectedBasecamp.pos.length : 0} Pos Terdata.`;
     }
   }
 
@@ -1661,6 +1718,8 @@ function changeDetailJalur(basecampId) {
     drawMountainTrail(m, selectedBasecamp);
     updateInspectorPanel(m, selectedBasecamp);
     updateMapTrailSummary(m, selectedBasecamp);
+  } else {
+    closeMapTrailSummary();
   }
 }
 
@@ -1775,7 +1834,7 @@ function renderPosTable(posList) {
           <button onclick="openPosModal(${p.id}, ${p.basecampId})" class="p-1.5 rounded-lg bg-surface-container hover:bg-secondary hover:text-white text-secondary transition-colors" title="Rename / Edit Pos">
             <span class="material-symbols-outlined text-[16px]">edit</span>
           </button>
-          <button onclick="deletePosItem(${p.id}, '${p.namaPos}')" class="p-1.5 rounded-lg bg-surface-container hover:bg-error hover:text-white text-error transition-colors" title="Hapus Pos">
+          <button onclick="deletePosItem(${p.id})" class="p-1.5 rounded-lg bg-surface-container hover:bg-error hover:text-white text-error transition-colors" title="Hapus Pos">
             <span class="material-symbols-outlined text-[16px]">delete</span>
           </button>
         </div>
@@ -1955,6 +2014,8 @@ async function submitBasecampForm(e) {
     kontak: document.getElementById('form-bc-kontak').value
   };
 
+  const targetGId = payload.gunungId;
+
   try {
     const url = id ? `/api/basecamp/${id}` : '/api/basecamp';
     const method = id ? 'PUT' : 'POST';
@@ -1971,7 +2032,13 @@ async function submitBasecampForm(e) {
       closeBasecampModal();
       await loadMountains();
       await loadBasecamps();
+      if (targetGId) {
+        selectedMountain = allMountains.find(m => m.id === targetGId) || selectedMountain;
+      }
       renderBasecampTable();
+      if (document.getElementById('view-detail')?.classList.contains('hidden') === false) {
+        renderDetailView();
+      }
     } else {
       showToast(json.message || 'Terjadi kesalahan', 'error');
     }
@@ -1984,6 +2051,8 @@ async function deleteBasecampItem(id) {
   const b = allBasecamps.find(item => item.id === id);
   if (!b) return;
 
+  const targetGId = b.gunungId;
+
   if (!confirm(`Apakah Anda yakin ingin menghapus ${b.nama}? Semua pos di jalur ini juga akan terhapus.`)) {
     return;
   }
@@ -1995,7 +2064,16 @@ async function deleteBasecampItem(id) {
       showToast(json.message, 'success');
       await loadMountains();
       await loadBasecamps();
+      if (targetGId) {
+        selectedMountain = allMountains.find(m => m.id === targetGId) || selectedMountain;
+        if (selectedMountain) {
+          selectedBasecamp = (selectedMountain.basecamps && selectedMountain.basecamps.length > 0) ? selectedMountain.basecamps[0] : null;
+        }
+      }
       renderBasecampTable();
+      if (document.getElementById('view-detail')?.classList.contains('hidden') === false) {
+        renderDetailView();
+      }
     } else {
       showToast(json.message || 'Gagal menghapus', 'error');
     }
@@ -2081,15 +2159,16 @@ async function submitGunungForm(e) {
     if (json.success) {
       showToast(json.message, 'success');
       closeGunungModal();
+      const targetId = id ? parseInt(id, 10) : null;
       await loadMountains();
       await loadStatistics();
-      if (selectedMountain && selectedMountain.id === parseInt(id, 10)) {
-        selectedMountain = allMountains.find(item => item.id === parseInt(id, 10)) || selectedMountain;
-        if (selectedBasecamp) {
-          updateInspectorPanel(selectedMountain, selectedBasecamp);
-        }
+      if (targetId) {
+        selectedMountain = allMountains.find(item => item.id === targetId) || selectedMountain;
       }
-      if (document.getElementById('view-detail').classList.contains('hidden') === false) {
+      if (selectedMountain && selectedBasecamp) {
+        updateInspectorPanel(selectedMountain, selectedBasecamp);
+      }
+      if (document.getElementById('view-detail')?.classList.contains('hidden') === false) {
         renderDetailView();
       }
     } else {
@@ -2137,61 +2216,95 @@ function openPosModal(posId = null, basecampId = null) {
   const modal = document.getElementById('pos-modal');
   if (!modal) return;
 
-  const m = selectedMountain || allMountains[0];
-  if (!m) return;
-
-  const bcSelect = document.getElementById('form-pos-bc-select');
-  bcSelect.innerHTML = m.basecamps.map(b => `
-    <option value="${b.id}" ${(basecampId && b.id === basecampId) || (selectedBasecamp && selectedBasecamp.id === b.id) ? 'selected' : ''}>
-      ${m.nama} - Via ${b.jalurVia}
-    </option>
-  `).join('');
-
-  const btnDelete = document.getElementById('btn-delete-pos');
-  const parentBadge = document.getElementById('modal-pos-parent-badge');
+  // 1. Identifikasi pos, basecamp, dan gunung sasaran secara akurat
+  let targetPos = null;
+  let targetBc = null;
+  let targetMtn = null;
 
   if (posId) {
-    let targetPos = null;
-    let parentBc = null;
     for (const g of allMountains) {
-      for (const b of g.basecamps) {
-        const found = b.pos.find(p => p.id === posId);
+      for (const b of (g.basecamps || [])) {
+        const found = (b.pos || []).find(p => p.id === posId);
         if (found) {
           targetPos = found;
-          parentBc = b;
+          targetBc = b;
+          targetMtn = g;
           break;
         }
       }
       if (targetPos) break;
     }
-
-    if (targetPos) {
-      document.getElementById('modal-pos-title').innerText = `Rename / Edit: ${targetPos.namaPos}`;
-      parentBadge.innerText = `${m.nama} · Via ${parentBc.jalurVia}`;
-      document.getElementById('form-pos-id').value = targetPos.id;
-      document.getElementById('form-pos-bc-id').value = targetPos.basecampId;
-      bcSelect.value = targetPos.basecampId;
-      document.getElementById('form-pos-nama').value = targetPos.namaPos;
-      document.getElementById('form-pos-urutan').value = targetPos.urutan || 1;
-      document.getElementById('form-pos-elevasi').value = targetPos.elevasi || '';
-      document.getElementById('form-pos-lat').value = targetPos.latitude;
-      document.getElementById('form-pos-lng').value = targetPos.longitude;
-      document.getElementById('form-pos-camp').checked = !!targetPos.areaCamp;
-      document.getElementById('form-pos-keterangan').value = targetPos.keterangan || '';
-      btnDelete?.classList.remove('hidden');
+  } else if (basecampId) {
+    for (const g of allMountains) {
+      const foundBc = (g.basecamps || []).find(b => b.id === basecampId);
+      if (foundBc) {
+        targetBc = foundBc;
+        targetMtn = g;
+        break;
+      }
     }
+  }
+
+  // Fallback jika tidak ditemukan
+  if (!targetMtn) {
+    targetMtn = selectedMountain || allMountains[0];
+  }
+  if (!targetBc && targetMtn) {
+    targetBc = (basecampId && targetMtn.basecamps ? targetMtn.basecamps.find(b => b.id === basecampId) : null)
+      || selectedBasecamp
+      || (targetMtn.basecamps && targetMtn.basecamps[0])
+      || null;
+  }
+
+  if (!targetMtn) return;
+
+  // Kunci konteks aktif ke gunung dan jalur ini
+  selectedMountain = targetMtn;
+  if (targetBc) {
+    selectedBasecamp = targetBc;
+    selectedJalurByMountain[targetMtn.id] = targetBc.id;
+  }
+
+  const bcSelect = document.getElementById('form-pos-bc-select');
+  if (bcSelect) {
+    bcSelect.innerHTML = (targetMtn.basecamps || []).map(b => `
+      <option value="${b.id}" ${targetBc && b.id === targetBc.id ? 'selected' : ''}>
+        ${targetMtn.nama} - Via ${b.jalurVia}
+      </option>
+    `).join('');
+    if (targetBc) {
+      bcSelect.value = targetBc.id;
+    }
+  }
+
+  const btnDelete = document.getElementById('btn-delete-pos');
+  const parentBadge = document.getElementById('modal-pos-parent-badge');
+
+  if (targetPos) {
+    document.getElementById('modal-pos-title').innerText = `Rename / Edit: ${targetPos.namaPos}`;
+    if (parentBadge) parentBadge.innerText = `${targetMtn.nama} · Via ${targetBc?.jalurVia || 'Utama'}`;
+    document.getElementById('form-pos-id').value = targetPos.id;
+    document.getElementById('form-pos-bc-id').value = targetPos.basecampId;
+    if (bcSelect) bcSelect.value = targetPos.basecampId;
+    document.getElementById('form-pos-nama').value = targetPos.namaPos;
+    document.getElementById('form-pos-urutan').value = targetPos.urutan || 1;
+    document.getElementById('form-pos-elevasi').value = targetPos.elevasi || '';
+    document.getElementById('form-pos-lat').value = targetPos.latitude;
+    document.getElementById('form-pos-lng').value = targetPos.longitude;
+    document.getElementById('form-pos-camp').checked = !!targetPos.areaCamp;
+    document.getElementById('form-pos-keterangan').value = targetPos.keterangan || '';
+    btnDelete?.classList.remove('hidden');
   } else {
     document.getElementById('modal-pos-title').innerText = 'Tambah Pos Baru';
-    parentBadge.innerText = `${m.nama} · Via ${selectedBasecamp?.jalurVia || 'Utama'}`;
+    if (parentBadge) parentBadge.innerText = `${targetMtn.nama} · Via ${targetBc?.jalurVia || 'Utama'}`;
     document.getElementById('pos-form').reset();
     document.getElementById('form-pos-id').value = '';
-    const currentBc = selectedBasecamp || m.basecamps[0];
-    if (currentBc) {
-      document.getElementById('form-pos-bc-id').value = currentBc.id;
-      bcSelect.value = currentBc.id;
-      document.getElementById('form-pos-urutan').value = currentBc.pos.length + 1;
-      document.getElementById('form-pos-lat').value = (currentBc.latitude + 0.005).toFixed(5);
-      document.getElementById('form-pos-lng').value = (currentBc.longitude + 0.005).toFixed(5);
+    if (targetBc) {
+      document.getElementById('form-pos-bc-id').value = targetBc.id;
+      if (bcSelect) bcSelect.value = targetBc.id;
+      document.getElementById('form-pos-urutan').value = (targetBc.pos ? targetBc.pos.length : 0) + 1;
+      document.getElementById('form-pos-lat').value = (targetBc.latitude + 0.005).toFixed(5);
+      document.getElementById('form-pos-lng').value = (targetBc.longitude + 0.005).toFixed(5);
     }
     btnDelete?.classList.add('hidden');
   }
@@ -2215,6 +2328,20 @@ async function submitPosForm(e) {
   e.preventDefault();
   const id = document.getElementById('form-pos-id').value;
   const basecampId = parseInt(document.getElementById('form-pos-bc-select').value, 10);
+
+  // Cari gunung dan basecamp target pemilik pos ini
+  let targetMtn = null;
+  let targetBc = null;
+  for (const g of allMountains) {
+    const foundBc = (g.basecamps || []).find(b => b.id === basecampId);
+    if (foundBc) {
+      targetBc = foundBc;
+      targetMtn = g;
+      break;
+    }
+  }
+  const mtnId = targetMtn ? targetMtn.id : (selectedMountain ? selectedMountain.id : null);
+  const bcId = targetBc ? targetBc.id : basecampId;
 
   const payload = {
     basecampId,
@@ -2242,12 +2369,22 @@ async function submitPosForm(e) {
       showToast(json.message, 'success');
       closePosModal();
       await loadMountains();
+
+      // Kunci tetap di gunung dan jalur yang sama
+      if (mtnId) {
+        selectedMountain = allMountains.find(m => m.id === mtnId) || selectedMountain;
+      }
       if (selectedMountain) {
-        selectedMountain = allMountains.find(item => item.id === selectedMountain.id) || selectedMountain;
+        if (bcId && selectedMountain.basecamps) {
+          selectedBasecamp = selectedMountain.basecamps.find(b => b.id === bcId) || selectedMountain.basecamps[0] || null;
+        } else if (selectedMountain.basecamps && selectedMountain.basecamps.length > 0) {
+          selectedBasecamp = selectedMountain.basecamps[0];
+        }
         if (selectedBasecamp) {
-          selectedBasecamp = selectedMountain.basecamps.find(b => b.id === selectedBasecamp.id) || selectedMountain.basecamps[0];
+          selectedJalurByMountain[selectedMountain.id] = selectedBasecamp.id;
           drawMountainTrail(selectedMountain, selectedBasecamp);
           updateInspectorPanel(selectedMountain, selectedBasecamp);
+          updateMapTrailSummary(selectedMountain, selectedBasecamp);
         }
       }
       renderDetailView();
@@ -2263,12 +2400,36 @@ async function deleteActivePos() {
   const id = document.getElementById('form-pos-id').value;
   if (!id) return;
   const name = document.getElementById('form-pos-nama').value;
-  await deletePosItem(parseInt(id, 10), name);
-  closePosModal();
+  const deleted = await deletePosItem(parseInt(id, 10), name);
+  if (deleted) {
+    closePosModal();
+  }
 }
 
-async function deletePosItem(id, nama) {
-  if (!confirm(`Hapus titik pos "${nama}"?`)) return;
+async function deletePosItem(id, namaParam = null) {
+  // Identifikasi pos, basecamp, dan gunung sasaran
+  let targetPos = null;
+  let targetMtn = null;
+  let targetBc = null;
+
+  for (const g of allMountains) {
+    for (const b of (g.basecamps || [])) {
+      const found = (b.pos || []).find(p => p.id === id);
+      if (found) {
+        targetPos = found;
+        targetBc = b;
+        targetMtn = g;
+        break;
+      }
+    }
+    if (targetPos) break;
+  }
+
+  const nama = namaParam || targetPos?.namaPos || 'Pos';
+  if (!confirm(`Hapus titik pos "${nama}"?`)) return false;
+
+  const mtnId = targetMtn ? targetMtn.id : (selectedMountain ? selectedMountain.id : null);
+  const bcId = targetBc ? targetBc.id : (selectedBasecamp ? selectedBasecamp.id : null);
 
   try {
     const res = await fetch(`/api/pos/${id}`, { method: 'DELETE' });
@@ -2276,19 +2437,33 @@ async function deletePosItem(id, nama) {
     if (json.success) {
       showToast(json.message, 'success');
       await loadMountains();
+
+      // Kunci tetap di gunung dan jalur yang sama
+      if (mtnId) {
+        selectedMountain = allMountains.find(m => m.id === mtnId) || selectedMountain;
+      }
       if (selectedMountain) {
-        selectedMountain = allMountains.find(item => item.id === selectedMountain.id) || selectedMountain;
+        if (bcId && selectedMountain.basecamps) {
+          selectedBasecamp = selectedMountain.basecamps.find(b => b.id === bcId) || selectedMountain.basecamps[0] || null;
+        } else if (selectedMountain.basecamps && selectedMountain.basecamps.length > 0) {
+          selectedBasecamp = selectedMountain.basecamps[0];
+        }
         if (selectedBasecamp) {
-          selectedBasecamp = selectedMountain.basecamps.find(b => b.id === selectedBasecamp.id) || selectedMountain.basecamps[0];
+          selectedJalurByMountain[selectedMountain.id] = selectedBasecamp.id;
           drawMountainTrail(selectedMountain, selectedBasecamp);
+          updateInspectorPanel(selectedMountain, selectedBasecamp);
+          updateMapTrailSummary(selectedMountain, selectedBasecamp);
         }
       }
       renderDetailView();
+      return true;
     } else {
       showToast(json.message || 'Gagal menghapus pos', 'error');
+      return false;
     }
   } catch (err) {
     showToast('Error: ' + err.message, 'error');
+    return false;
   }
 }
 

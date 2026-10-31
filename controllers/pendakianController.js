@@ -648,8 +648,23 @@ const updatePos = async (req, res) => {
     const existing = await prisma.posGunung.findUnique({ where: { id: posId } });
     if (!existing) return res.status(404).json({ success: false, message: 'Pos tidak ditemukan' });
 
-    const { namaPos, urutan, latitude, longitude, elevasi, adaAir, areaCamp, keterangan } = req.body;
+    const { basecampId, namaPos, urutan, latitude, longitude, elevasi, adaAir, areaCamp, keterangan } = req.body;
     const updateData = {};
+
+    if (basecampId !== undefined) {
+      const bcId = parseInt(basecampId, 10);
+      if (!isNaN(bcId) && bcId !== existing.basecampId) {
+        updateData.basecampId = bcId;
+        await prisma.basecamp.update({
+          where: { id: existing.basecampId },
+          data: { totalPos: { decrement: 1 } }
+        });
+        await prisma.basecamp.update({
+          where: { id: bcId },
+          data: { totalPos: { increment: 1 } }
+        });
+      }
+    }
 
     if (namaPos !== undefined) updateData.namaPos = namaPos.trim();
     if (urutan !== undefined) updateData.urutan = parseInt(urutan, 10);
