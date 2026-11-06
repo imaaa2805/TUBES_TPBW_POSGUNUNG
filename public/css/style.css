@@ -71,12 +71,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  transform: translate(-50%, -50%);
+  width: 120px;
   cursor: pointer;
   transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center center;
 }
 .custom-mountain-pin:hover {
-  transform: translate(-50%, -50%) scale(1.2);
+  transform: scale(1.15);
   z-index: 9999 !important;
 }
 
@@ -214,6 +215,7 @@
 }
 
 .custom-geo-pin {
+<<<<<<< HEAD
   position: relative;
   width: 0;
   height: 0;
@@ -235,6 +237,20 @@
   border: 2.5px solid #ffffff;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   z-index: 10;
+=======
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 140px;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center center;
+}
+
+.custom-geo-pin:hover {
+  transform: scale(1.15);
+  z-index: 9999 !important;
+>>>>>>> ed375f18bacf61739254017104971a4e5b776b98
 }
 
 .custom-geo-pin:hover .geo-pin-circle {
@@ -261,3 +277,12 @@
   pointer-events: none;
   z-index: 12;
 }
+
+/* Trip Planner Modal Overlay & Stacking */
+#trip-planner-modal {
+  z-index: 99999 !important;
+}
+#trip-planner-modal.hidden {
+  display: none !important;
+}
+

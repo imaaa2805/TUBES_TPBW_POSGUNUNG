@@ -25,10 +25,11 @@ router.post('/pos', pendakianController.createPos);
 router.put('/pos/:id', pendakianController.updatePos);
 router.delete('/pos/:id', pendakianController.deletePos);
 
-// Navigation, GPX & Batch Coordinates Update
+// Navigation, GPX, Batch Coordinates & Mountain Trip Planner
 router.get('/route', pendakianController.getRouteNavigation);
 router.get('/gpx/:basecampId', pendakianController.exportGpx);
 router.put('/coordinates/batch', pendakianController.updateCoordinatesBatch);
+router.get('/trip-planner/:basecampId', pendakianController.getTripPlan);
 
 // Backward Compatibility Aliases for fasilitas
 router.get('/fasilitas', pendakianController.getAllBasecamp);

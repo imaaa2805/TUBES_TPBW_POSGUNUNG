@@ -100,33 +100,27 @@
       </div>
 
       <!-- Main Navigation Tabs -->
-      <nav class="hidden xl:flex items-center gap-1 p-1 bg-surface-container-low rounded-xl border border-surface-container" id="main-nav">
-        <button id="nav-btn-map" onclick="switchView('map')" class="nav-tab px-4 py-2 text-xs font-headline font-bold rounded-lg transition-all bg-primary-container text-on-primary shadow-sm flex items-center gap-1.5">
+      <nav class="flex items-center gap-1 p-1 bg-surface-container-low rounded-xl border border-surface-container overflow-x-auto max-w-[calc(100vw-340px)] no-scrollbar" id="main-nav">
+        <button id="nav-btn-map" onclick="switchView('map')" class="nav-tab px-3.5 lg:px-4 py-2 text-xs font-headline font-bold rounded-lg transition-all bg-primary-container text-on-primary shadow-sm flex items-center gap-1.5 shrink-0">
           <span class="material-symbols-outlined text-[18px]">map</span>
           <span>Peta Jawa</span>
         </button>
-        <button id="nav-btn-detail" onclick="switchView('detail')" class="nav-tab px-4 py-2 text-xs font-headline font-semibold rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all flex items-center gap-1.5">
+        <button id="nav-btn-detail" onclick="switchView('detail')" class="nav-tab px-3 lg:px-4 py-2 text-xs font-headline font-semibold rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all flex items-center gap-1.5 shrink-0">
           <span class="material-symbols-outlined text-[18px]">alt_route</span>
           <span>Detail Pos & Jalur</span>
         </button>
-        <button id="nav-btn-basecamp" onclick="switchView('basecamp')" class="nav-tab px-4 py-2 text-xs font-headline font-semibold rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all flex items-center gap-1.5">
+        <button id="nav-btn-basecamp" onclick="switchView('basecamp')" class="nav-tab px-3 lg:px-4 py-2 text-xs font-headline font-semibold rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all flex items-center gap-1.5 shrink-0">
           <span class="material-symbols-outlined text-[18px]">holiday_village</span>
           <span>Direktori Basecamp</span>
         </button>
+        <button id="nav-btn-planner" onclick="openTripPlannerModal()" class="nav-tab px-3.5 lg:px-4 py-2 text-xs font-headline font-bold rounded-lg text-primary hover:text-white hover:bg-primary bg-primary/10 border border-primary/30 transition-all flex items-center gap-1.5 shrink-0 shadow-xs active:scale-95 cursor-pointer" title="Buka Trip Planner & Estimasi Waktu Naik">
+          <span class="material-symbols-outlined text-[18px] text-primary">schedule</span>
+          <span>Trip Planner</span>
+        </button>
       </nav>
 
-      <!-- Right Action Bar (Live Tracking, CRUD Action, Bell, Profile) -->
+      <!-- Right Action Bar (CRUD Action, Bell, Profile) -->
       <div class="flex items-center gap-3 shrink-0">
-
-        <!-- Live Tracking GPS Button -->
-        <button id="topbar-live-track-btn" onclick="toggleLiveTrackingHUD()" class="flex items-center gap-1.5 bg-surface-container-lowest hover:bg-surface-container-high text-primary text-xs font-headline font-bold px-3 py-2 rounded-xl transition-all shadow-sm border border-surface-container active:scale-95" title="Buka Kontrol GPS Live Tracking">
-          <span class="relative flex h-2.5 w-2.5">
-            <span id="topbar-track-ping" class="hidden animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span id="topbar-track-dot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-outline"></span>
-          </span>
-          <span class="material-symbols-outlined text-[18px]">near_me</span>
-          <span class="hidden md:inline">Live Tracking</span>
-        </button>
 
         <!-- Admin: Kelola Gunung -->
         <button onclick="openGunungModal()" class="flex items-center gap-1.5 bg-surface-container-low hover:bg-surface-container-high text-on-surface text-xs font-headline font-bold px-3 py-2 rounded-xl transition-all shadow-sm border border-surface-container active:scale-95" title="Admin: Tambah atau Kelola Gunung">
@@ -235,11 +229,16 @@
               </label>
             </div>
 
-            <!-- Quick Add Mountain Button -->
-            <button onclick="openGunungModal()" class="text-primary hover:text-primary-container text-[11px] font-headline font-bold flex items-center gap-0.5" title="Tambah Gunung Baru">
-              <span class="material-symbols-outlined text-[15px]">add</span>
-              <span>+ Gunung</span>
-            </button>
+            <div class="flex items-center gap-1.5">
+              <button onclick="openTripPlannerModal()" class="px-2.5 py-1 rounded-lg bg-primary hover:bg-primary-container text-white text-[11px] font-headline font-bold flex items-center gap-1 shadow-sm transition-all active:scale-95" title="Buka Trip Planner & Rekomendasi Jam Naik">
+                <span class="material-symbols-outlined text-[14px]">schedule</span>
+                <span>Trip Planner</span>
+              </button>
+              <button onclick="openGunungModal()" class="text-on-surface-variant hover:text-primary text-[11px] font-headline font-semibold flex items-center gap-0.5" title="Tambah Gunung Baru">
+                <span class="material-symbols-outlined text-[14px]">add</span>
+                <span>+ Gunung</span>
+              </button>
+            </div>
           </div>
 
           <!-- Scrollable Mountain Card List -->
@@ -355,107 +354,21 @@
                   </div>
                 </div>
               </div>
-              <div class="flex items-center gap-1.5 shrink-0">
+              <div class="flex items-center gap-1.5 shrink-0 flex-wrap">
+                <button onclick="openTripPlannerModal()" class="px-3 py-1.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary text-xs font-headline font-bold flex items-center gap-1 transition-all shadow-sm active:scale-95" title="Estimasi Waktu & Rekomendasi Jam Mulai">
+                  <span class="material-symbols-outlined text-[16px]">schedule</span>
+                  <span>Trip Planner</span>
+                </button>
                 <button onclick="openCoordEditorModal()" class="px-3 py-1.5 rounded-xl bg-secondary hover:bg-secondary-container text-white text-xs font-headline font-bold flex items-center gap-1 transition-all shadow-sm active:scale-95" title="Edit Latitude & Longitude Titik Jalur Ini">
                   <span class="material-symbols-outlined text-[16px]">edit_location_alt</span>
                   <span class="hidden sm:inline">Edit Lat/Lng</span>
                 </button>
-                <button onclick="openArahRutePendakianModal()" class="px-3 py-1.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary text-xs font-headline font-bold flex items-center gap-1 transition-all shadow-sm active:scale-95" title="Lihat Urutan Pos dan Langkah Rute">
+                <button onclick="openArahRutePendakianModal()" class="px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-headline font-bold flex items-center gap-1 transition-all shadow-sm active:scale-95" title="Lihat Urutan Pos dan Langkah Rute">
                   <span class="material-symbols-outlined text-[16px]">format_list_numbered</span>
                   <span class="hidden md:inline">Urutan Pos</span>
                 </button>
                 <button onclick="closeMapTrailSummary()" class="p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors" title="Sembunyikan Ringkasan">
                   <span class="material-symbols-outlined text-[18px]">close</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- FLOATING LIVE TRACKING HUD OVERLAY -->
-          <div id="live-tracking-hud" class="hidden absolute top-20 right-4 z-40 w-80 md:w-96 bg-surface-container-lowest/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-surface-container overflow-hidden transition-all duration-300">
-            <!-- HUD Header -->
-            <div class="p-3.5 bg-surface-container-low border-b border-surface-container flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="relative flex h-3 w-3">
-                  <span id="hud-ping" class="hidden animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span id="hud-dot" class="relative inline-flex rounded-full h-3 w-3 bg-outline"></span>
-                </span>
-                <div>
-                  <h4 class="font-headline font-bold text-xs uppercase tracking-wider text-on-surface">Live Tracking GPS</h4>
-                  <span id="hud-status-text" class="text-[10px] text-on-surface-variant font-bold">Siaga (Standby)</span>
-                </div>
-              </div>
-              <div class="flex items-center gap-1">
-                <button onclick="toggleTrackingLock()" id="hud-btn-lock" class="p-1 rounded-lg text-primary hover:bg-surface-container transition-colors" title="Kunci Tampilan Peta ke Posisi Hiker">
-                  <span class="material-symbols-outlined text-[18px]">lock</span>
-                </button>
-                <button onclick="closeLiveTrackingHUD()" class="p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors" title="Tutup HUD">
-                  <span class="material-symbols-outlined text-[18px]">close</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- HUD Telemetry Grid -->
-            <div class="p-3 grid grid-cols-3 gap-2 bg-surface-container-lowest border-b border-surface-container">
-              <div class="bg-surface-container-low p-2 rounded-xl border border-surface-container">
-                <span class="text-[9px] font-headline font-bold text-on-surface-variant uppercase block">Waktu Tempuh</span>
-                <span id="hud-timer" class="font-headline font-bold text-sm text-primary font-mono block">00:00:00</span>
-              </div>
-              <div class="bg-surface-container-low p-2 rounded-xl border border-surface-container">
-                <span class="text-[9px] font-headline font-bold text-on-surface-variant uppercase block">Jarak Tempuh</span>
-                <span id="hud-distance" class="font-headline font-bold text-sm text-secondary font-mono block">0.00 km</span>
-              </div>
-              <div class="bg-surface-container-low p-2 rounded-xl border border-surface-container">
-                <span class="text-[9px] font-headline font-bold text-on-surface-variant uppercase block">Elevasi</span>
-                <span id="hud-elevation" class="font-headline font-bold text-sm text-on-surface font-mono block">-- mdpl</span>
-              </div>
-            </div>
-
-            <!-- HUD Sub-info (Pos Terdekat & Kecepatan & Koordinat) -->
-            <div class="px-3 py-2 text-xs flex flex-col gap-1.5 bg-surface-container-low/40 border-b border-surface-container">
-              <div class="flex items-center justify-between">
-                <span class="text-[11px] text-on-surface-variant flex items-center gap-1">
-                  <span class="material-symbols-outlined text-[14px] text-primary">navigation</span>
-                  Pos Terdekat:
-                </span>
-                <span id="hud-nearest-pos" class="font-headline font-bold text-[11px] text-primary truncate max-w-[180px]">-</span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-[11px] text-on-surface-variant flex items-center gap-1">
-                  <span class="material-symbols-outlined text-[14px] text-secondary">speed</span>
-                  Kecepatan:
-                </span>
-                <span id="hud-speed" class="font-headline font-bold text-[11px] text-on-surface">0.0 km/h</span>
-              </div>
-              <div class="flex items-center justify-between font-mono text-[10px] text-outline">
-                <span>Koordinat:</span>
-                <span id="hud-coords">-- , --</span>
-              </div>
-            </div>
-
-            <!-- HUD Action Controls -->
-            <div class="p-3 bg-surface-container-low flex flex-col gap-2">
-              <div id="hud-idle-controls" class="grid grid-cols-2 gap-2">
-                <button id="hud-btn-real-gps" onclick="startRealGpsTracking()" class="px-3 py-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-headline text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm">
-                  <span class="material-symbols-outlined text-[16px]">my_location</span>
-                  <span>GPS Asli</span>
-                </button>
-                <button id="hud-btn-sim" onclick="startSimulatedTracking()" class="px-3 py-2 rounded-xl bg-secondary-container hover:bg-secondary text-white font-headline text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm">
-                  <span class="material-symbols-outlined text-[16px]">play_arrow</span>
-                  <span>Simulasi Jalur</span>
-                </button>
-              </div>
-              <div id="hud-active-controls" class="hidden flex items-center gap-2">
-                <button id="hud-btn-pause" onclick="togglePauseTracking()" class="flex-1 px-3 py-2 rounded-xl bg-surface-container-high hover:bg-surface-container text-on-surface font-headline text-xs font-bold flex items-center justify-center gap-1 transition-colors">
-                  <span class="material-symbols-outlined text-[16px]" id="hud-pause-icon">pause</span>
-                  <span id="hud-pause-text">Jeda</span>
-                </button>
-                <button onclick="stopTracking()" class="flex-1 px-3 py-2 rounded-xl bg-error hover:bg-red-700 text-white font-headline text-xs font-bold flex items-center justify-center gap-1 transition-colors shadow-xs">
-                  <span class="material-symbols-outlined text-[16px]">stop</span>
-                  <span>Hentikan</span>
-                </button>
-                <button onclick="exportLiveTrackGpx()" class="p-2 rounded-xl bg-surface-container-lowest hover:bg-surface-container text-primary font-headline text-xs font-bold border border-surface-container shadow-xs" title="Ekspor GPX Hasil Tracking">
-                  <span class="material-symbols-outlined text-[16px]">download</span>
                 </button>
               </div>
             </div>
@@ -482,124 +395,6 @@
               </div>
             </div>
             <span class="font-headline text-[11px] text-on-surface-variant border-l border-outline-variant/40 pl-2">Skala Dinamis</span>
-          </div>
-
-          <!-- FLOATING INSPECTOR PANEL (DOCKED BOTTOM RIGHT) -->
-          <div id="inspector-panel" class="absolute bottom-6 right-6 w-[560px] max-w-[calc(100%-2rem)] z-30 bg-surface-container-lowest rounded-2xl shadow-2xl border border-surface-container overflow-hidden transition-all duration-300">
-            
-            <!-- Header Banner & Realtime Badges -->
-            <div class="relative p-4 bg-surface-container-low flex items-start justify-between border-b border-surface-container">
-              <div class="flex items-start gap-3">
-                <div class="w-12 h-12 rounded-xl bg-primary-container text-on-primary flex items-center justify-center shrink-0 shadow-sm">
-                  <span class="material-symbols-outlined text-[28px]" id="inspector-icon">terrain</span>
-                </div>
-                <div>
-                  <div class="flex items-center gap-2">
-                    <span id="inspector-type" class="font-headline text-[10px] uppercase tracking-widest text-primary font-bold">GUNUNG PENDAKIAN</span>
-                    <span id="inspector-status-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-headline text-[10px] font-bold">
-                      <span class="w-1.5 h-1.5 rounded-full bg-tertiary-container animate-ping"></span> JALUR BUKA RESMI
-                    </span>
-                  </div>
-                  <div class="flex items-center gap-2 mt-1">
-                    <h3 id="inspector-title" class="font-headline font-bold text-2xl text-primary tracking-tight leading-none">Gunung Merbabu</h3>
-                    <button onclick="openGunungModal(selectedMountain?.id)" class="px-2 py-0.5 rounded-md bg-surface-container-high hover:bg-primary hover:text-white text-primary font-headline text-[10px] font-bold flex items-center gap-1 transition-colors" title="Rename & Edit Gunung">
-                      <span class="material-symbols-outlined text-[12px]">edit</span>
-                      <span>Rename</span>
-                    </button>
-                  </div>
-                  <p id="inspector-subtitle" class="text-xs text-on-surface-variant mt-1">Boyolali & Magelang, Jawa Tengah · Puncak Kenteng Songo <strong class="text-on-surface">3.145 mdpl</strong></p>
-                </div>
-              </div>
-              <button onclick="closeInspector()" class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container transition-colors" title="Tutup Panel">
-                <span class="material-symbols-outlined text-[20px]">close</span>
-              </button>
-            </div>
-
-            <!-- JALUR / VIA / BASECAMP SELECTOR BAR (Requirement 2: Memencet gunung terdapat jalur/via/basecamp) -->
-            <div class="p-3 bg-surface-container-lowest border-b border-surface-container">
-              <div class="flex items-center justify-between mb-1.5">
-                <span class="font-headline text-[11px] font-bold text-on-surface uppercase flex items-center gap-1">
-                  <span class="material-symbols-outlined text-[16px] text-secondary">alt_route</span>
-                  Pilihan Jalur / Via / Basecamp:
-                </span>
-                <span id="inspector-jalur-count-badge" class="font-headline text-[10px] font-bold text-primary bg-primary-fixed/40 px-2 py-0.5 rounded-full">5 Jalur</span>
-              </div>
-              <div id="inspector-jalur-pills" class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                <!-- Dynamically filled with via pills e.g. [Via Selo], [Via Suwanting], etc. -->
-              </div>
-            </div>
-
-            <!-- Metric Grid (4 Cards) - Fokus Jarak BC-Puncak, Jumlah Pos, Basecamp, dan Elevasi -->
-            <div class="grid grid-cols-4 gap-2 p-3 bg-surface-container-lowest border-b border-surface-container">
-              <div class="bg-surface-container-low p-2.5 rounded-xl border border-surface-container">
-                <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block">Jarak BC - Puncak</span>
-                <span id="metric-trail-distance" class="font-headline font-bold text-xs sm:text-sm text-primary block font-mono truncate">-- KM</span>
-                <span id="metric-trail-distance-desc" class="text-[10px] text-on-surface-variant block truncate">Panjang Jalur</span>
-              </div>
-              <div class="bg-surface-container-low p-2.5 rounded-xl border border-surface-container">
-                <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block">Jumlah Pos Jalur</span>
-                <span id="metric-total-pos" class="font-headline font-bold text-xs sm:text-sm text-secondary block font-mono truncate">-- Pos</span>
-                <span id="metric-total-pos-desc" class="text-[10px] text-on-surface-variant block truncate">Waypoint Terdata</span>
-              </div>
-              <div class="bg-surface-container-low p-2.5 rounded-xl border border-surface-container">
-                <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block">Basecamp Aktif</span>
-                <span id="metric-basecamp-count" class="font-headline font-bold text-xs text-on-surface block truncate">Basecamp</span>
-                <span id="metric-basecamp-list" class="text-[10px] text-on-surface-variant block truncate">Titik Awal</span>
-              </div>
-              <div class="bg-surface-container-low p-2.5 rounded-xl border border-surface-container">
-                <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block">Puncak & Tanjakan</span>
-                <span id="metric-puncak-elev" class="font-headline font-bold text-xs text-on-surface block truncate">-- mdpl</span>
-                <span id="metric-gain-val" class="text-[10px] text-secondary font-bold block truncate">+-- m Gain</span>
-              </div>
-            </div>
-
-            <!-- Dynamic Elevation Profile Box -->
-            <div class="px-4 py-2.5 bg-surface-container-lowest border-b border-surface-container">
-              <div class="flex items-center justify-between mb-1">
-                <span id="elev-profile-label" class="font-headline text-[11px] font-bold uppercase text-on-surface-variant">Profil Elevasi Jalur (Selo Ridge)</span>
-                <span id="elev-gain-label" class="font-headline text-[11px] text-primary font-bold font-mono">+1.345 m Gain · 8.9 km</span>
-              </div>
-              <div class="w-full h-16 bg-surface-container-low rounded-xl p-1 relative overflow-hidden flex items-end border border-surface-container">
-                <svg id="elev-svg" class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 480 40">
-                  <defs>
-                    <linearGradient id="elev-grad" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stop-color="#1e5f38" stop-opacity="0.35"></stop>
-                      <stop offset="100%" stop-color="#1e5f38" stop-opacity="0.05"></linearGradient>
-                  </defs>
-                  <path id="elev-area" d="M 0 38 L 40 34 L 110 30 L 190 24 L 270 17 L 360 11 L 430 5 L 480 2 L 480 40 L 0 40 Z" fill="url(#elev-grad)"></path>
-                  <path id="elev-line" d="M 0 38 L 40 34 L 110 30 L 190 24 L 270 17 L 360 11 L 430 5 L 480 2" fill="none" stroke="#1e5f38" stroke-width="2.5"></path>
-                  <g id="elev-dots"></g>
-                </svg>
-                <div id="elev-start-label" class="absolute bottom-1 left-2 font-headline text-[9px] font-bold text-on-surface-variant">Basecamp 1.800m</div>
-                <div id="elev-summit-label" class="absolute bottom-1 right-2 font-headline text-[9px] font-bold text-secondary">Puncak 3.145m</div>
-              </div>
-            </div>
-
-            <!-- Action CTAs -->
-            <div class="p-3 bg-surface-container-low flex items-center justify-between gap-2">
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <button onclick="downloadActiveGpx()" class="px-3 py-2 rounded-xl bg-surface-container-lowest text-primary hover:bg-surface-container-high transition-colors font-headline text-xs font-bold flex items-center gap-1.5 shadow-sm border border-surface-container">
-                  <span class="material-symbols-outlined text-[16px]">download</span>
-                  <span>GPX</span>
-                </button>
-                <button onclick="openCoordEditorModal()" class="px-3 py-2 rounded-xl bg-surface-container-lowest text-secondary hover:bg-surface-container-high transition-colors font-headline text-xs font-bold flex items-center gap-1.5 shadow-sm border border-surface-container" title="Edit Latitude & Longitude Jalur Ini">
-                  <span class="material-symbols-outlined text-[16px]">edit_location_alt</span>
-                  <span>Edit Lat/Lng</span>
-                </button>
-                <button onclick="openArahRutePendakianModal()" class="px-3 py-2 rounded-xl bg-surface-container-lowest text-secondary hover:bg-surface-container-high transition-colors font-headline text-xs font-bold flex items-center gap-1.5 shadow-sm border border-surface-container" title="Panduan Arah Rute (Basecamp ke Puncak)">
-                  <span class="material-symbols-outlined text-[16px]">alt_route</span>
-                  <span class="hidden sm:inline">Rute</span>
-                </button>
-                <button onclick="startSimulatedTracking()" class="px-3 py-2 rounded-xl bg-secondary hover:bg-secondary-container text-white transition-colors font-headline text-xs font-bold flex items-center gap-1.5 shadow-sm" title="Mulai Live Tracking Jalur Ini">
-                  <span class="material-symbols-outlined text-[16px]">near_me</span>
-                  <span class="hidden sm:inline">Tracking</span>
-                </button>
-              </div>
-              <button onclick="openDetailViewForActive()" class="px-4 py-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-headline text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95">
-                <span>Detail Pos & Jalur</span>
-                <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
-              </button>
-            </div>
           </div>
 
         </section>
@@ -942,11 +737,6 @@
         </div>
 
         <div>
-          <label class="font-headline font-bold text-on-surface block mb-1">Tipe / Morfologi Gunung</label>
-          <input id="form-gunung-tipe" placeholder="Karakter / Wilayah Pegunungan" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none" type="text">
-        </div>
-
-        <div>
           <label class="font-headline font-bold text-on-surface block mb-1">Deskripsi Kawasan Pendakian</label>
           <textarea id="form-gunung-deskripsi" rows="3" placeholder="Informasi singkat jalur pendakian..." class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none"></textarea>
         </div>
@@ -1134,11 +924,17 @@
       </div>
 
       <!-- Modal Footer -->
-      <div class="p-3.5 bg-surface-container-low border-t border-surface-container flex items-center justify-between gap-2">
-        <button type="button" onclick="resetCoordEditor()" class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-headline font-bold flex items-center gap-1 transition-colors">
-          <span class="material-symbols-outlined text-[16px]">restart_alt</span>
-          <span>Reset Semula</span>
-        </button>
+      <div class="p-3.5 bg-surface-container-low border-t border-surface-container flex items-center justify-between gap-2 flex-wrap">
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="autoAlignTrailCoordinates()" class="px-3.5 py-2 rounded-xl bg-secondary/15 hover:bg-secondary text-secondary hover:text-white text-xs font-headline font-bold flex items-center gap-1.5 transition-all shadow-sm" title="Selaraskan dan rapikan posisi seluruh titik pos secara otomatis mengikuti alur wajar dari Basecamp ke Puncak">
+            <span class="material-symbols-outlined text-[16px]">auto_fix_high</span>
+            <span>Rapikan Garis & Titik</span>
+          </button>
+          <button type="button" onclick="resetCoordEditor()" class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-headline font-bold flex items-center gap-1 transition-colors">
+            <span class="material-symbols-outlined text-[16px]">restart_alt</span>
+            <span>Reset Semula</span>
+          </button>
+        </div>
         <div class="flex items-center gap-2">
           <button type="button" onclick="closeCoordEditorModal()" class="px-4 py-2 rounded-xl bg-surface-container text-on-surface hover:bg-surface-container-high font-headline text-xs font-bold transition-colors">
             Tutup
@@ -1212,14 +1008,262 @@
         <!-- Loaded via JS -->
       </div>
 
-      <div class="p-3 bg-surface-container-low border-t border-surface-container flex items-center justify-between gap-2">
-        <button onclick="startLiveTrackingFromArahRute()" class="px-4 py-2 rounded-xl bg-secondary hover:bg-secondary-container text-white font-headline text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95">
-          <span class="material-symbols-outlined text-[16px]">near_me</span>
-          <span>Mulai Live Tracking dari Basecamp</span>
-        </button>
+      <div class="p-3 bg-surface-container-low border-t border-surface-container flex items-center justify-between gap-2 flex-wrap">
+        <div class="flex items-center gap-2">
+          <button onclick="openTripPlannerFromNav()" class="px-3.5 py-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-headline text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95">
+            <span class="material-symbols-outlined text-[16px]">schedule</span>
+            <span>Bikin Jadwal Trip Planner</span>
+          </button>
+        </div>
         <button onclick="closeNavModal()" class="px-4 py-2 rounded-xl bg-surface-container text-on-surface hover:bg-surface-container-high font-headline text-xs font-bold transition-colors">
           Tutup
         </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: TRIP PLANNER & ESTIMASI WAKTU PENDAKIAN ==================== -->
+  <div id="trip-planner-modal" class="fixed inset-0 z-[9999] hidden bg-inverse-surface/65 backdrop-blur-md flex items-center justify-center p-3 sm:p-4" onclick="if(event.target === this) closeTripPlannerModal()">
+    <div class="bg-surface-container-lowest rounded-3xl shadow-2xl border border-surface-container w-full max-w-4xl overflow-hidden flex flex-col max-h-[94vh]" onclick="event.stopPropagation()">
+      
+      <!-- Modal Header -->
+      <div class="p-4 sm:p-5 bg-gradient-to-r from-primary to-primary-container text-on-primary flex items-center justify-between shrink-0 shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md text-white flex items-center justify-center shrink-0 border border-white/30 shadow-inner">
+            <span class="material-symbols-outlined text-[26px]">hiking</span>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="font-headline font-bold text-lg sm:text-xl text-white tracking-tight">Mountain Trip Planner</h3>
+              <span class="px-2.5 py-0.5 rounded-full bg-amber-400 text-on-surface font-headline text-[10px] font-black uppercase tracking-wider">Kalkulator Estimasi Jam Naik & Waktu Tempuh</span>
+            </div>
+            <p class="text-xs text-white/90 mt-0.5 font-medium">Kalo mau sampai jam segini ➔ Harus mulai naik jam segini! Lengkap dengan jadwal pos & estimasi PP.</p>
+          </div>
+        </div>
+        <button onclick="closeTripPlannerModal()" class="text-white/80 hover:text-white p-1.5 rounded-xl hover:bg-white/10 transition-colors" title="Tutup Modal">
+          <span class="material-symbols-outlined text-[24px]">close</span>
+        </button>
+      </div>
+
+      <!-- Scrollable Content Body -->
+      <div class="p-4 sm:p-6 overflow-y-auto flex-1 flex flex-col gap-5 text-xs">
+        
+        <!-- Mountain & Basecamp Selector Bar -->
+        <div class="p-4 bg-surface-container-low rounded-2xl border border-surface-container grid grid-cols-1 md:grid-cols-2 gap-3.5 shadow-sm">
+          <div>
+            <label class="text-[11px] font-headline font-bold text-on-surface-variant uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+              <span class="material-symbols-outlined text-[15px] text-primary">terrain</span>
+              <span>Pilih Gunung Tujuan:</span>
+            </label>
+            <select id="planner-gunung-select" onchange="onPlannerMountainChange(this.value)" class="w-full bg-surface-container-lowest text-on-surface font-headline font-semibold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-surface-container focus:outline-none focus:border-primary shadow-inner cursor-pointer">
+              <!-- Loaded via JS -->
+            </select>
+          </div>
+          <div>
+            <label class="text-[11px] font-headline font-bold text-on-surface-variant uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+              <span class="material-symbols-outlined text-[15px] text-secondary">holiday_village</span>
+              <span>Pilihan Jalur Via (Basecamp):</span>
+            </label>
+            <select id="planner-jalur-select" onchange="onPlannerJalurChange(this.value)" class="w-full bg-surface-container-lowest text-on-surface font-headline font-semibold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-surface-container focus:outline-none focus:border-secondary shadow-inner cursor-pointer">
+              <!-- Loaded via JS -->
+            </select>
+          </div>
+        </div>
+
+        <!-- KALKULATOR ESTIMASI WAKTU UTAMA (TARGET JAM SAMPAI -> HARUS NAIK JAM BERAPA) -->
+        <div class="p-4 sm:p-5 rounded-2xl bg-surface-container-lowest border-2 border-primary/25 shadow-sm flex flex-col gap-4">
+          
+          <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-surface-container">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl bg-primary-container text-white flex items-center justify-center shadow-xs">
+                <span class="material-symbols-outlined text-[18px]">av_timer</span>
+              </span>
+              <div>
+                <h4 class="font-headline font-bold text-sm text-primary">Kalkulator Waktu & Target Perjalanan</h4>
+                <p class="text-[11px] text-on-surface-variant">Tentukan target waktu tiba di puncak untuk menghitung rekomendasi jam mulai mendaki dari basecamp.</p>
+              </div>
+            </div>
+
+            <!-- Mode Indikator: Mau Sampai Jam Berapa -->
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary border border-primary/25 text-xs font-headline font-bold shadow-2xs">
+              <span class="material-symbols-outlined text-[15px]">flag</span>
+              <span>Mau Sampai Jam Berapa</span>
+            </div>
+          </div>
+
+          <!-- Input Time Row & Presets -->
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+            
+            <!-- Box Input Jam Target -->
+            <div class="md:col-span-5 bg-surface-container-low p-3.5 rounded-2xl border border-surface-container flex flex-col gap-1.5">
+              <label id="planner-input-time-label" class="font-headline font-bold text-[11px] text-on-surface uppercase flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px] text-secondary">alarm</span>
+                <span>Target Tiba di Puncak Pukul:</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <input type="time" id="planner-time-picker" value="05:15" onchange="onPlannerTimePickerChange(this.value)" class="flex-1 bg-surface-container-lowest font-mono font-bold text-xl px-3.5 py-2 rounded-xl border-2 border-primary/40 text-primary focus:outline-none focus:border-primary shadow-inner">
+                <span class="font-headline font-bold text-xs text-on-surface-variant bg-surface-container px-2.5 py-2 rounded-xl border border-surface-container">WIB</span>
+              </div>
+            </div>
+
+            <!-- 4 Quick Presets Momen Pendakian -->
+            <div class="md:col-span-7 flex flex-col gap-1.5">
+              <span class="font-headline font-bold text-[10px] uppercase text-on-surface-variant">Pilihan Cepat Target Momen:</span>
+              <div class="grid grid-cols-4 gap-2">
+                <button type="button" onclick="setQuickPresetTime('05:15')" class="preset-time-btn px-2 py-2 rounded-xl border border-primary bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all text-center flex flex-col items-center shadow-xs">
+                  <span class="text-base">🌅</span>
+                  <span class="font-headline font-bold text-[11px] mt-0.5 leading-none">05:15</span>
+                  <span class="text-[9px] opacity-80">Sunrise</span>
+                </button>
+                <button type="button" onclick="setQuickPresetTime('08:30')" class="preset-time-btn px-2 py-2 rounded-xl border border-surface-container bg-surface-container-low hover:bg-primary hover:text-white transition-all text-center flex flex-col items-center">
+                  <span class="text-base">🌄</span>
+                  <span class="font-headline font-bold text-[11px] mt-0.5 leading-none">08:30</span>
+                  <span class="text-[9px] text-on-surface-variant opacity-80">Pagi Sejuk</span>
+                </button>
+                <button type="button" onclick="setQuickPresetTime('12:00')" class="preset-time-btn px-2 py-2 rounded-xl border border-surface-container bg-surface-container-low hover:bg-primary hover:text-white transition-all text-center flex flex-col items-center">
+                  <span class="text-base">☀️</span>
+                  <span class="font-headline font-bold text-[11px] mt-0.5 leading-none">12:00</span>
+                  <span class="text-[9px] text-on-surface-variant opacity-80">Siang Hari</span>
+                </button>
+                <button type="button" onclick="setQuickPresetTime('17:15')" class="preset-time-btn px-2 py-2 rounded-xl border border-surface-container bg-surface-container-low hover:bg-primary hover:text-white transition-all text-center flex flex-col items-center">
+                  <span class="text-base">🌇</span>
+                  <span class="font-headline font-bold text-[11px] mt-0.5 leading-none">17:15</span>
+                  <span class="text-[9px] text-on-surface-variant opacity-80">Sunset</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Highlight Recommendation Banner (Big, Vibrant, Ultra Clear) -->
+          <div id="planner-recommendation-box" class="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-primary via-primary-container to-secondary text-white shadow-xl border border-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="flex items-start gap-3.5">
+              <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0 border border-white/25 shadow-inner">
+                <span id="planner-rec-icon" class="material-symbols-outlined text-[30px] text-amber-300">directions_run</span>
+              </div>
+              <div>
+                <span id="planner-rec-badge" class="font-headline text-[10px] uppercase font-bold text-amber-300 tracking-wider block">REKOMENDASI JADWAL KEBERANGKATAN RESMI:</span>
+                <div class="flex items-baseline gap-2 mt-0.5 flex-wrap">
+                  <span id="planner-rec-action-label" class="text-xs text-white/90 font-medium">Anda Harus Mulai Naik dari Basecamp:</span>
+                  <strong id="planner-rec-time" class="font-headline font-black text-2xl sm:text-3xl text-amber-300 tracking-tight drop-shadow-md">22:10 WIB</strong>
+                </div>
+                <p id="planner-rec-reason" class="text-xs text-white/90 mt-1 leading-relaxed">Mulai mendaki pada jam tersebut agar tiba di puncak tepat pada target waktu Anda.</p>
+              </div>
+            </div>
+            <div class="bg-black/30 backdrop-blur-md p-3 rounded-2xl border border-white/15 text-center shrink-0 self-start sm:self-auto min-w-[155px] shadow-sm">
+              <span id="planner-rec-target-label" class="text-[10px] text-white/80 block font-headline uppercase font-bold">Estimasi Kembali di Basecamp</span>
+              <span id="planner-rec-peak-time" class="text-xl font-headline font-extrabold text-amber-300 block mt-0.5">--:-- WIB</span>
+              <span id="planner-rec-ascent-duration" class="text-[10px] text-white/90 font-mono block mt-0.5 font-bold">Total PP: ~-- Jam</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Hiker Pace / Speed Selector -->
+        <div>
+          <label class="text-[11px] font-headline font-bold text-on-surface-variant uppercase tracking-wider block mb-2 flex items-center gap-1">
+            <span class="material-symbols-outlined text-[16px] text-secondary">speed</span>
+            <span>Ritme Fisik & Kecepatan Berjalan:</span>
+          </label>
+          <div class="grid grid-cols-3 gap-2" id="planner-pace-tabs">
+            <button type="button" onclick="setPlannerPace('santai')" data-pace="santai" class="planner-pace-btn p-2.5 rounded-xl border border-surface-container bg-surface-container-low hover:bg-surface-container text-left transition-all flex items-center gap-2">
+              <span class="text-lg">🐢</span>
+              <div>
+                <span class="font-headline font-bold text-xs text-on-surface block leading-tight">Santai / Pemula</span>
+                <span class="text-[9px] text-on-surface-variant font-mono block">2.0 km/j · Istirahat 15m</span>
+              </div>
+            </button>
+            <button type="button" onclick="setPlannerPace('sedang')" data-pace="sedang" class="planner-pace-btn p-2.5 rounded-xl border-2 border-primary bg-primary-container/20 text-left transition-all flex items-center gap-2 shadow-sm ring-1 ring-primary">
+              <span class="text-lg">🚶</span>
+              <div>
+                <span class="font-headline font-bold text-xs text-on-surface block leading-tight">Sedang / Reguler</span>
+                <span class="text-[9px] text-on-surface-variant font-mono block">2.8 km/j · Istirahat 10m</span>
+              </div>
+            </button>
+            <button type="button" onclick="setPlannerPace('cepat')" data-pace="cepat" class="planner-pace-btn p-2.5 rounded-xl border border-surface-container bg-surface-container-low hover:bg-surface-container text-left transition-all flex items-center gap-2">
+              <span class="text-lg">🏃</span>
+              <div>
+                <span class="font-headline font-bold text-xs text-on-surface block leading-tight">Cepat / Trail Run</span>
+                <span class="text-[9px] text-on-surface-variant font-mono block">4.0 km/j · Istirahat 5m</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 Metric Cards Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div class="bg-surface-container-low p-3 rounded-2xl border border-surface-container text-center">
+            <span class="font-headline text-[10px] uppercase font-bold text-primary block flex items-center justify-center gap-1">
+              <span class="material-symbols-outlined text-[13px]">north</span> Naik (Ascent)
+            </span>
+            <span id="planner-metric-ascent" class="font-headline font-bold text-sm sm:text-base text-on-surface block mt-1 font-mono">-- Jam -- Mnt</span>
+            <span class="text-[9px] text-on-surface-variant block mt-0.5">Basecamp ➔ Puncak</span>
+          </div>
+
+          <div class="bg-surface-container-low p-3 rounded-2xl border border-surface-container text-center">
+            <span class="font-headline text-[10px] uppercase font-bold text-secondary block flex items-center justify-center gap-1">
+              <span class="material-symbols-outlined text-[13px]">south</span> Turun (Descent)
+            </span>
+            <span id="planner-metric-descent" class="font-headline font-bold text-sm sm:text-base text-on-surface block mt-1 font-mono">-- Jam -- Mnt</span>
+            <span class="text-[9px] text-on-surface-variant block mt-0.5">Puncak ➔ Basecamp</span>
+          </div>
+
+          <div class="bg-surface-container-low p-3 rounded-2xl border border-surface-container text-center">
+            <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block flex items-center justify-center gap-1">
+              <span class="material-symbols-outlined text-[13px]">timelapse</span> Total Durasi PP
+            </span>
+            <span id="planner-metric-total" class="font-headline font-bold text-sm sm:text-base text-primary block mt-1 font-mono">-- Jam -- Mnt</span>
+            <span class="text-[9px] text-on-surface-variant block mt-0.5">Termasuk istirahat</span>
+          </div>
+
+          <div class="bg-surface-container-low p-3 rounded-2xl border border-surface-container text-center">
+            <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block flex items-center justify-center gap-1">
+              <span class="material-symbols-outlined text-[13px]">straighten</span> Jarak & Tanjakan
+            </span>
+            <span id="planner-metric-dist" class="font-headline font-bold text-sm sm:text-base text-on-surface block mt-1 font-mono">-- km</span>
+            <span id="planner-metric-gain" class="text-[9px] text-secondary font-bold block mt-0.5">+-- m Gain</span>
+          </div>
+        </div>
+
+        <!-- Step-by-Step Timeline Itinerary -->
+        <div class="bg-surface-container-lowest rounded-2xl border border-surface-container p-4 shadow-sm">
+          <div class="flex items-center justify-between pb-3 border-b border-surface-container mb-3">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-[20px] text-primary">route</span>
+              <h4 class="font-headline font-bold text-sm text-primary">Timeline Jadwal Jam per Pos (Milestone Itinerary)</h4>
+            </div>
+            <span id="planner-pos-count-badge" class="font-headline font-bold text-[10px] px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant">5 Pos Terdaftar</span>
+          </div>
+
+          <div id="planner-timeline-list" class="flex flex-col gap-2.5">
+            <!-- Timeline checkpoints loaded dynamically via JS -->
+          </div>
+        </div>
+
+        <!-- Safety Advisories & Checklist -->
+        <div id="planner-safety-box" class="p-4 bg-surface-container-low rounded-2xl border border-surface-container flex flex-col gap-2.5">
+          <!-- Loaded via JS -->
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-3.5 sm:p-4 bg-surface-container-low border-t border-surface-container flex items-center justify-between gap-2 flex-wrap shrink-0">
+        <button type="button" onclick="copyTripPlanToClipboard()" class="px-4 py-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container text-primary hover:text-primary-container font-headline text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm border border-surface-container">
+          <span class="material-symbols-outlined text-[16px]">content_copy</span>
+          <span>Salin Jadwal ke WhatsApp / Catatan</span>
+        </button>
+
+        <div class="flex items-center gap-2 ml-auto">
+          <button type="button" onclick="showTripPlanOnMap()" class="px-4 py-2.5 rounded-xl bg-secondary/15 hover:bg-secondary text-secondary hover:text-white font-headline text-xs font-bold flex items-center gap-1.5 transition-all">
+            <span class="material-symbols-outlined text-[16px]">map</span>
+            <span>Tampilkan di Peta</span>
+          </button>
+          <button type="button" onclick="closeTripPlannerModal()" class="px-4 py-2.5 rounded-xl bg-surface-container text-on-surface hover:bg-surface-container-high font-headline text-xs font-bold transition-colors">
+            Tutup
+          </button>
+        </div>
       </div>
 
     </div>
