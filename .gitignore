@@ -53,3 +53,6 @@ database/
 referensi_dashboard/
 referensi_update_titik/
 
+
+# Cache respons OpenStreetMap
+scripts/.osm-cache/

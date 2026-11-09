@@ -19,7 +19,7 @@ let selectedBasecamp = null;
 let selectedJalurByMountain = {}; // mountainId -> basecampId (Pencet via/jalur baru disesuaikan jumlah posnya)
 
 let activeRegion = 'all'; // 'all', 'jabar', 'jateng', 'diy', 'jatim'
-let filterOpen = true;
+let filterOpen = false;
 let filterBeginner = false;
 let searchQuery = '';
 
@@ -265,16 +265,57 @@ async function loadMountains() {
         updateInspectorPanel(currentMtn, selectedBasecamp);
         updateMapTrailSummary(currentMtn, selectedBasecamp);
       }
-    } else {
-      // Default select Merbabu atau gunung pertama (hanya jika belum ada gunung terpilih sebelumnya)
-      const defaultMtn = allMountains.find(m => m.nama.toLowerCase().includes('merbabu')) || allMountains[0];
-      if (defaultMtn) {
-        selectMountain(defaultMtn.id, false);
-      }
+    } else if (map && REGION_BOUNDS.all) {
+      // Tampilkan peta Pulau Jawa secara utuh tanpa langsung zoom ke satu gunung
+      map.fitBounds(REGION_BOUNDS.all, { padding: [30, 30] });
     }
   } catch (err) {
     console.error('Gagal memuat data gunung:', err);
   }
+}
+
+/**
+ * Helper: Normalisasi teks pencarian agar tahan variasi ejaan (Cikurai/Cikuray, Baturraden/Baturaden, Penanggungan/Penanggunan, dsb.)
+ */
+function normalizeSearchText(str) {
+  return (str || '')
+    .toString()
+    .toLowerCase()
+    .replace(/[-_.,()/]/g, ' ')
+    .replace(/\bgunung\b|\bgn\b|\bmt\b|\bbasecamp\b|\bbc\b|\bvia\b/g, ' ')
+    .replace(/y/g, 'i')
+    .replace(/([a-z])\1+/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function matchesSearchQuery(targetStr, rawQuery) {
+  if (!rawQuery || !rawQuery.trim()) return true;
+  if (!targetStr) return false;
+  const qRaw = rawQuery.toLowerCase().trim();
+  const tRaw = targetStr.toString().toLowerCase();
+  if (tRaw.includes(qRaw)) return true;
+
+  const qNorm = normalizeSearchText(rawQuery);
+  const tNorm = normalizeSearchText(targetStr);
+  if (qNorm && tNorm.includes(qNorm)) return true;
+
+  // Token match: semua kata dalam query ada pada target
+  const tokens = qNorm.split(' ').filter(Boolean);
+  if (tokens.length > 1 && tokens.every(tok => tNorm.includes(tok))) return true;
+
+  return false;
+}
+
+function matchesProvinceRegion(m, region) {
+  if (!region || region === 'all') return true;
+  const prov = (m.provinsi || '').toLowerCase();
+  const kab = (m.kabupaten || '').toLowerCase();
+  if (region === 'jabar') return prov.includes('barat') || kab.includes('jabar');
+  if (region === 'jateng') return prov.includes('tengah') || kab.includes('jateng');
+  if (region === 'diy') return prov.includes('diy') || prov.includes('yogyakarta') || kab.includes('diy');
+  if (region === 'jatim') return prov.includes('timur') || kab.includes('jatim');
+  return true;
 }
 
 /**
@@ -291,47 +332,51 @@ function applyFilters() {
 }
 
 function resetFilters() {
+  activeRegion = 'all';
   filterOpen = false;
   filterBeginner = false;
   searchQuery = '';
   const searchInput = document.getElementById('mountain-search');
   if (searchInput) searchInput.value = '';
+  document.getElementById('clear-search')?.classList.add('hidden');
   const openEl = document.getElementById('toggle-open');
   if (openEl) openEl.checked = false;
   const begEl = document.getElementById('toggle-beginner');
   if (begEl) begEl.checked = false;
-  applyFilters();
+  setProvinceFilter('all');
 }
 
 /**
  * Filter Mountains based on province, open status, beginner, and search
  */
 function getFilteredMountains() {
+  const hasSearch = searchQuery.trim() !== '';
+
   return allMountains.filter(m => {
-    // Filter Region
-    if (activeRegion === 'jabar' && !m.provinsi.toLowerCase().includes('barat')) return false;
-    if (activeRegion === 'jateng' && !m.provinsi.toLowerCase().includes('tengah')) return false;
-    if (activeRegion === 'diy' && !m.provinsi.toLowerCase().includes('diy')) return false;
-    if (activeRegion === 'jatim' && !m.provinsi.toLowerCase().includes('timur')) return false;
+    // Jika pengguna sedang mengetik di kolom pencarian, cari di seluruh database gunung, basecamp, via, dan pos tanpa terhalang tab provinsi / filter toggle
+    if (hasSearch) {
+      const q = searchQuery.trim();
+      const matchName = matchesSearchQuery(m.nama, q);
+      const matchKab = matchesSearchQuery(m.kabupaten, q);
+      const matchProv = matchesSearchQuery(m.provinsi, q);
+      const matchedBc = (m.basecamps || []).find(b =>
+        matchesSearchQuery(b.jalurVia, q) ||
+        matchesSearchQuery(b.nama, q) ||
+        (b.pos || []).some(p => matchesSearchQuery(p.namaPos, q))
+      );
+
+      if (!matchName && !matchKab && !matchProv && !matchedBc) return false;
+      return true;
+    }
+
+    // Filter Region (saat tidak sedang mencari spesifik)
+    if (!matchesProvinceRegion(m, activeRegion)) return false;
 
     // Filter Open
     if (filterOpen && m.statusJalur !== 'Buka') return false;
 
     // Filter Beginner (<= 2600 mdpl)
     if (filterBeginner && m.ketinggian > 2600) return false;
-
-    // Filter Single Search Input
-    if (searchQuery.trim() !== '') {
-      const q = searchQuery.toLowerCase();
-      const matchName = m.nama.toLowerCase().includes(q);
-      const matchKab = m.kabupaten.toLowerCase().includes(q);
-      const matchedBc = m.basecamps.find(b => b.jalurVia.toLowerCase().includes(q) || b.nama.toLowerCase().includes(q));
-      if (!matchName && !matchKab && !matchedBc) return false;
-      // Jika pencarian cocok dengan nama jalur/via tertentu, sesuaikan via aktif
-      if (matchedBc && !selectedJalurByMountain[m.id]) {
-        selectedJalurByMountain[m.id] = matchedBc.id;
-      }
-    }
 
     return true;
   });
@@ -404,18 +449,17 @@ function renderMountainCards() {
       `;
     }
 
-    // Jalur / Via chips inside card dengan Jarak KM & Jumlah Pos
+    // Jalur / Via chips inside card dengan Elevasi MDPL & Jumlah Pos
     const jalurChipsHtml = m.basecamps.map(b => {
       const isBcActive = activeBc && activeBc.id === b.id;
-      const bWaypoints = getExpeditionWaypoints(m, b);
-      const bSummary = calculateTrailSegments(bWaypoints);
+      const bcElevStr = `${(b.elevasi || Math.round(m.ketinggian * 0.48)).toLocaleString('id-ID')} mdpl`;
       const chipClass = isBcActive 
         ? 'bg-primary text-on-primary font-bold shadow-xs ring-1 ring-primary-container' 
         : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface font-medium';
       return `
-        <span onclick="event.stopPropagation(); switchJalur(${m.id}, ${b.id});" class="px-2 py-0.5 rounded-lg text-[10px] font-headline cursor-pointer transition-all flex items-center gap-1 ${chipClass}" title="Pencet untuk melihat visualisasi ${bSummary.totalDistanceFormatted} & ${b.pos.length} pos via ${b.jalurVia}">
+        <span onclick="event.stopPropagation(); switchJalur(${m.id}, ${b.id});" class="px-2 py-0.5 rounded-lg text-[10px] font-headline cursor-pointer transition-all flex items-center gap-1 ${chipClass}" title="Pencet untuk melihat visualisasi ${bcElevStr} ➔ ${m.ketinggian.toLocaleString('id-ID')} mdpl & ${b.pos.length} pos via ${b.jalurVia}">
           <span>Via ${b.jalurVia}</span>
-          <span class="text-[9px] font-mono font-bold ${isBcActive ? 'bg-black/20 text-white' : 'bg-surface-container-highest text-on-surface-variant'} px-1 py-0.2 rounded">${bSummary.totalDistanceFormatted}</span>
+          <span class="text-[9px] font-mono font-bold ${isBcActive ? 'bg-black/20 text-white' : 'bg-surface-container-highest text-on-surface-variant'} px-1 py-0.2 rounded">${bcElevStr}</span>
           <span class="text-[9px] font-bold ${isBcActive ? 'bg-black/20 text-white' : 'bg-surface-container-highest text-on-surface-variant'} px-1 py-0.2 rounded">${b.pos.length} Pos</span>
         </span>
       `;
@@ -424,8 +468,7 @@ function renderMountainCards() {
     // Active trail preview badge if active basecamp exists
     let activeTrailBadgeHtml = '';
     if (activeBc) {
-      const activeWps = getExpeditionWaypoints(m, activeBc);
-      const activeSummary = calculateTrailSegments(activeWps);
+      const bcElev = (activeBc.elevasi || Math.round(m.ketinggian * 0.48)).toLocaleString('id-ID');
       activeTrailBadgeHtml = `
         <div class="mt-2 px-2.5 py-1 rounded-xl bg-primary/5 border border-primary/15 flex items-center justify-between text-[10px] font-headline">
           <span class="text-primary font-bold flex items-center gap-1 truncate">
@@ -433,7 +476,7 @@ function renderMountainCards() {
             Via ${activeBc.jalurVia} (BC ➔ Puncak)
           </span>
           <div class="flex items-center gap-1.5 shrink-0 font-mono">
-            <strong class="text-primary font-bold">${activeSummary.totalDistanceFormatted}</strong>
+            <strong class="text-primary font-bold">${bcElev} ➔ ${m.ketinggian.toLocaleString('id-ID')} mdpl</strong>
             <span class="text-outline-variant">•</span>
             <strong class="text-secondary font-bold">${activeBc.pos.length} Pos</strong>
           </div>
@@ -476,9 +519,15 @@ function renderMountainCards() {
 
         <!-- Jalur / Via badges inside card -->
         <div class="mt-2.5 pt-2 border-t border-surface-container">
-          <div class="text-[10px] font-headline font-bold text-on-surface-variant uppercase mb-1">Pilihan Jalur / Via:</div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[10px] font-headline font-bold text-on-surface-variant uppercase">Pilihan Jalur / Via:</span>
+            <button onclick="event.stopPropagation(); openGunungModal(${m.id});" class="text-[10px] font-headline font-bold text-primary hover:underline flex items-center gap-0.5" title="Tambah Jalur Via & Pos untuk ${m.nama}">
+              <span class="material-symbols-outlined text-[12px]">add</span>
+              <span>+ Via & Pos</span>
+            </button>
+          </div>
           <div class="flex flex-wrap gap-1">
-            ${jalurChipsHtml}
+            ${jalurChipsHtml || `<button onclick="event.stopPropagation(); openGunungModal(${m.id});" class="px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-headline font-bold text-[10px] hover:bg-primary hover:text-white transition-all">+ Isi Jalur Via & Pos Pendakian</button>`}
           </div>
         </div>
 
@@ -500,14 +549,8 @@ function renderMountainCards() {
 function renderMountainPins() {
   mountainMarkersGroup.clearLayers();
 
-  // Filter mountains ONLY belonging to the active selected province
-  const provinceMountains = allMountains.filter(m => {
-    if (activeRegion === 'jabar') return m.provinsi.toLowerCase().includes('barat');
-    if (activeRegion === 'jateng') return m.provinsi.toLowerCase().includes('tengah');
-    if (activeRegion === 'diy') return m.provinsi.toLowerCase().includes('diy');
-    if (activeRegion === 'jatim') return m.provinsi.toLowerCase().includes('timur');
-    return true; // 'all'
-  });
+  // Sinkronkan pin peta dengan hasil filter & pencarian katalog
+  const provinceMountains = getFilteredMountains();
 
   provinceMountains.forEach(m => {
     if (!m.latitude || !m.longitude) return;
@@ -586,6 +629,12 @@ function setProvinceFilter(region) {
   const regLabel = document.getElementById('map-region-label');
   if (regLabel) regLabel.innerText = `WILAYAH: ${regionNames[region] || 'PULAU JAWA'}`;
 
+  // Bersihkan seleksi gunung & garis jalur aktif agar peta fokus menampilkan wilayah
+  selectedMountain = null;
+  selectedBasecamp = null;
+  if (trailMarkersGroup) trailMarkersGroup.clearLayers();
+  closeMapTrailSummary();
+
   // Re-render Cards and Pins (Only pins in that province will be shown!)
   renderMountainCards();
   renderMountainPins();
@@ -597,19 +646,6 @@ function setProvinceFilter(region) {
     duration: 1.2,
     easeLinearity: 0.25
   });
-
-  // Automatically select the first mountain in that province
-  const provinceMountains = allMountains.filter(m => {
-    if (region === 'jabar') return m.provinsi.toLowerCase().includes('barat');
-    if (region === 'jateng') return m.provinsi.toLowerCase().includes('tengah');
-    if (region === 'diy') return m.provinsi.toLowerCase().includes('diy');
-    if (region === 'jatim') return m.provinsi.toLowerCase().includes('timur');
-    return true;
-  });
-
-  if (provinceMountains.length > 0) {
-    selectMountain(provinceMountains[0].id, false);
-  }
 
   showToast(`Wilayah: ${regionNames[region]}`, 'info');
 }
@@ -623,12 +659,9 @@ function selectMountain(id, flyTo = true) {
 
   selectedMountain = m;
 
-  // Jika belum ada jalur yang dipilih untuk gunung ini, gunakan jalur pertama sebagai default
-  if (!selectedJalurByMountain[m.id] && m.basecamps && m.basecamps.length > 0) {
-    selectedJalurByMountain[m.id] = m.basecamps[0].id;
-  }
+  // Jangan langsung otomatis memilih jalur/via sebelum tombol Via dipencet oleh user
   const bcId = selectedJalurByMountain[m.id];
-  selectedBasecamp = m.basecamps.find(b => b.id === bcId) || m.basecamps[0] || null;
+  selectedBasecamp = bcId ? (m.basecamps.find(b => b.id === bcId) || null) : null;
 
   renderMountainCards();
   renderMountainPins();
@@ -639,21 +672,19 @@ function selectMountain(id, flyTo = true) {
     cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  // Draw Trail Polyline & Waypoint Markers dari Basecamp ke Puncak
+  // Gambar garis jalur & pos HANYA jika Via sudah dipencet
   if (selectedBasecamp) {
     drawMountainTrail(m, selectedBasecamp);
     updateInspectorPanel(m, selectedBasecamp);
-    updateMapTrailSummary(m, selectedBasecamp);
-
-    const waypoints = getExpeditionWaypoints(m, selectedBasecamp);
-    const summary = calculateTrailSegments(waypoints);
-    showToast(`🏔️ ${m.nama} via ${selectedBasecamp.jalurVia}: Jarak ${summary.totalDistanceFormatted} (BC ➔ Puncak) · ${selectedBasecamp.pos.length} Pos`, 'info');
+    updateMapTrailSummary(m, selectedBasecamp, false);
   } else {
+    if (trailMarkersGroup) trailMarkersGroup.clearLayers();
     updateInspectorPanel(m, null);
     closeMapTrailSummary();
     if (flyTo && m.latitude && m.longitude) {
-      map.flyTo([m.latitude, m.longitude], 12.5, { duration: 1.0 });
+      map.flyTo([m.latitude, m.longitude], 13.5, { duration: 1.0 });
     }
+    showToast(`🏔️ ${m.nama} (${m.ketinggian.toLocaleString('id-ID')} mdpl) · Klik salah satu "Via" untuk menampilkan jalur & pos`, 'info');
   }
 
   // Update Telemetry Bar
@@ -682,7 +713,8 @@ function switchJalur(mountainId, basecampId) {
 
   drawMountainTrail(m, bc);
   updateInspectorPanel(m, bc);
-  updateMapTrailSummary(m, bc);
+  // Jangan langsung memunculkan kotak putih di tengah peta, baru muncul saat titik/jalur di peta dipencet
+  updateMapTrailSummary(m, bc, false);
 
   const waypoints = getExpeditionWaypoints(m, bc);
   const summary = calculateTrailSegments(waypoints);
@@ -733,7 +765,7 @@ function getExpeditionWaypoints(mountain, basecamp) {
   if (mountain.latitude && mountain.longitude) {
     const lastWp = waypoints[waypoints.length - 1];
     const distToPeak = calculateHaversineMeters(lastWp.lat, lastWp.lng, mountain.latitude, mountain.longitude);
-    if (distToPeak > 150 && !lastWp.name.toLowerCase().includes('puncak')) {
+    if (distToPeak > 150) {
       waypoints.push({
         id: `summit-${mountain.id}`,
         basecampId: basecamp.id,
@@ -746,6 +778,8 @@ function getExpeditionWaypoints(mountain, basecamp) {
         areaCamp: false,
         keterangan: `Titik tertinggi Puncak ${mountain.nama} (${mountain.ketinggian} MDPL)`
       });
+    } else if (lastWp) {
+      lastWp.type = 'summit';
     }
   }
 
@@ -757,7 +791,7 @@ function getExpeditionWaypoints(mountain, basecamp) {
  */
 function calculateTrailSegments(waypoints) {
   if (!waypoints || waypoints.length < 2) {
-    return { segments: [], totalDistanceM: 0, totalGainM: 0, totalMinutes: 0, totalDistanceFormatted: '0 km', totalGainFormatted: '+0 m', totalHoursFormatted: '0 Menit' };
+    return { segments: [], totalDistanceM: 0, totalGainM: 0, totalMinutes: 0, totalDistanceFormatted: '0 mdpl', totalGainFormatted: '+0 mdpl', totalHoursFormatted: '0 Menit' };
   }
 
   const segments = [];
@@ -787,9 +821,9 @@ function calculateTrailSegments(waypoints) {
       fromElev: from.elev,
       toElev: to.elev,
       distanceM: Math.round(distM),
-      distanceFormatted: distM >= 1000 ? `${(distM / 1000).toFixed(2)} km` : `${Math.round(distM)} m`,
+      distanceFormatted: `${(to.elev || 0).toLocaleString('id-ID')} mdpl`,
       elevGain: gainM,
-      elevGainFormatted: gainM > 0 ? `+${gainM} m` : '±0 m',
+      elevGainFormatted: gainM > 0 ? `+${gainM.toLocaleString('id-ID')} mdpl` : '±0 mdpl',
       estMinutes,
       estTimeFormatted: estMinutes >= 60 ? `${Math.floor(estMinutes / 60)}j ${estMinutes % 60}m` : `${estMinutes} mnt`,
       keterangan: to.keterangan || (to.type === 'summit' ? 'Menuju Titik Puncak' : `Pos pendakian`)
@@ -797,13 +831,14 @@ function calculateTrailSegments(waypoints) {
   }
 
   const totalMinutes = segments.reduce((acc, s) => acc + s.estMinutes, 0);
+  const peakElev = waypoints[waypoints.length - 1]?.elev || 0;
 
   return {
     segments,
     totalDistanceM: Math.round(totalDistanceM),
-    totalDistanceFormatted: `${(totalDistanceM / 1000).toFixed(2)} km`,
+    totalDistanceFormatted: `${peakElev.toLocaleString('id-ID')} mdpl`,
     totalGainM,
-    totalGainFormatted: `+${totalGainM} m`,
+    totalGainFormatted: `+${totalGainM.toLocaleString('id-ID')} mdpl`,
     totalMinutes,
     totalHoursFormatted: totalMinutes >= 60 ? `${Math.floor(totalMinutes / 60)} Jam ${totalMinutes % 60} Menit` : `${totalMinutes} Menit`
   };
@@ -838,7 +873,10 @@ function drawMountainTrail(mountain, basecamp) {
   }));
 
   const summary = calculateTrailSegments(waypoints);
-  const polyCoords = waypoints.map(w => [w.lat, w.lng]);
+  // Garis mengikuti geometri jalur nyata (OpenStreetMap) bila tersedia; jika tidak, sambungkan titik BC -> Pos -> Puncak
+  const waypointCoords = waypoints.map(w => [w.lat, w.lng]);
+  const hasGeo = Array.isArray(basecamp.jalurGeo) && basecamp.jalurGeo.length >= 2;
+  const polyCoords = hasGeo ? basecamp.jalurGeo : waypointCoords;
 
   if (polyCoords.length >= 2) {
     // 1. White casing polyline underneath for high contrast
@@ -860,23 +898,24 @@ function drawMountainTrail(mountain, basecamp) {
     }).addTo(trailMarkersGroup);
 
     // Tooltip on the trail line
-    const distFormatted = summary.totalDistanceFormatted;
+    const bcElevStr = (basecamp.elevasi || Math.round(mountain.ketinggian * 0.48)).toLocaleString('id-ID');
     const posCount = basecamp.pos ? basecamp.pos.length : 0;
     const tooltipHtml = `
       <div class="p-1.5 text-xs font-headline font-bold text-on-surface">
         <div class="text-primary font-bold">🏔️ ${mountain.nama} · Via ${basecamp.jalurVia}</div>
-        <div class="text-on-surface mt-0.5 font-mono">🛣️ Jarak Jalur: <strong class="text-primary">${distFormatted}</strong> (BC ➔ Puncak)</div>
+        <div class="text-on-surface mt-0.5 font-mono">⛰️ Elevasi: <strong class="text-primary">${bcElevStr} ➔ ${mountain.ketinggian.toLocaleString('id-ID')} mdpl</strong></div>
         <div class="text-secondary font-mono">📍 Jumlah Pos: <strong class="text-secondary">${posCount} Pos</strong> Pendakian</div>
         <div class="text-[10px] text-on-surface-variant font-normal mt-0.5 italic">Klik jalur untuk buka panduan langkah rute</div>
       </div>
     `;
     activeTrailPolyline.bindTooltip(tooltipHtml, { sticky: true, className: 'trail-tooltip' });
     activeTrailPolyline.on('click', () => {
+      updateMapTrailSummary(mountain, basecamp, true);
       openArahRutePendakianModal();
     });
 
     // 3. Smooth fitBounds so the full trail from BC all the way to Puncak is framed right in the center!
-    const bounds = L.latLngBounds(polyCoords);
+    const bounds = L.latLngBounds([...polyCoords, ...waypointCoords]);
     if (bounds.isValid()) {
       map.fitBounds(bounds, {
         padding: [80, 80],
@@ -887,16 +926,8 @@ function drawMountainTrail(mountain, basecamp) {
     }
   }
 
-  // Hitung akumulasi jarak dari Basecamp untuk setiap titik
-  let cumDistanceM = 0;
-
   waypoints.forEach((wp, idx) => {
-    if (idx > 0) {
-      const prev = waypoints[idx - 1];
-      cumDistanceM += calculateHaversineMeters(prev.lat, prev.lng, wp.lat, wp.lng);
-    }
-
-    const distFromBcFormatted = cumDistanceM >= 1000 ? `${(cumDistanceM / 1000).toFixed(2)} km` : `${Math.round(cumDistanceM)} m`;
+    const wpElevFormatted = `${(wp.elev || 1500).toLocaleString('id-ID')} mdpl`;
     let pinColor = '#059669'; // Emerald
     let innerContent = '';
     let size = 30;
@@ -906,17 +937,17 @@ function drawMountainTrail(mountain, basecamp) {
       pinColor = '#d97706'; // Amber 600
       size = 36;
       innerContent = `<span class="material-symbols-outlined text-[20px]">cottage</span>`;
-      labelPillText = `🚩 START: BC ${basecamp.jalurVia} (0.0 km)`;
+      labelPillText = `🚩 START: BC ${basecamp.jalurVia} (${wpElevFormatted})`;
     } else if (wp.type === 'summit' || idx === waypoints.length - 1) {
       pinColor = '#b91c1c'; // Red 700
       size = 38;
       innerContent = `<span class="material-symbols-outlined text-[20px]">filter_hdr</span>`;
-      labelPillText = `⛰️ FINISH: Puncak (${summary.totalDistanceFormatted})`;
+      labelPillText = `⛰️ FINISH: Puncak (${mountain.ketinggian.toLocaleString('id-ID')} mdpl)`;
     } else {
       // Pos Intermediate: display order number inside circle pin
       const orderNum = wp.urutan || idx;
       innerContent = `<span class="font-headline font-bold text-xs font-mono">${orderNum}</span>`;
-      labelPillText = `Pos ${orderNum}: ${wp.name} (${distFromBcFormatted})`;
+      labelPillText = `Pos ${orderNum}: ${wp.name} (${wpElevFormatted})`;
     }
 
     const labelOffset = Math.round(size / 2) + 5;
@@ -936,14 +967,9 @@ function drawMountainTrail(mountain, basecamp) {
     const posIcon = L.divIcon({
       html: posHtml,
       className: 'empty-icon',
-<<<<<<< HEAD
       iconSize: [0, 0],
       iconAnchor: [0, 0],
       popupAnchor: [0, -labelOffset - 6]
-=======
-      iconSize: [140, totalH],
-      iconAnchor: [70, anchorY]
->>>>>>> ed375f18bacf61739254017104971a4e5b776b98
     });
 
     const marker = L.marker([wp.lat, wp.lng], { 
@@ -985,11 +1011,12 @@ function drawMountainTrail(mountain, basecamp) {
     const isBc = wp.type === 'basecamp';
     const isSummit = wp.type === 'summit' || idx === waypoints.length - 1;
     const badgeText = isBc ? 'TITIK AWAL (BASECAMP)' : (isSummit ? 'TITIK AKHIR (PUNCAK)' : `POS #${wp.urutan || idx}`);
+    const gainFromBc = Math.max(0, (wp.elev || 1500) - (basecamp.elevasi || 1400));
     const distInfo = isBc 
-      ? `Total Jarak ke Puncak: <strong class="text-primary font-mono">${summary.totalDistanceFormatted}</strong>`
+      ? `Puncak Gunung: <strong class="text-primary font-mono">${mountain.ketinggian.toLocaleString('id-ID')} mdpl</strong>`
       : isSummit
-        ? `Total Jarak Ditempuh: <strong class="text-primary font-mono">${summary.totalDistanceFormatted}</strong>`
-        : `Jarak dari Basecamp: <strong class="text-secondary font-mono">${distFromBcFormatted}</strong>`;
+        ? `Total Tanjakan: <strong class="text-primary font-mono">${summary.totalGainFormatted}</strong>`
+        : `Tanjakan dari BC: <strong class="text-secondary font-mono">+${gainFromBc.toLocaleString('id-ID')} mdpl</strong>`;
 
     const popupHtml = `
       <div class="p-3 text-xs flex flex-col gap-1.5 min-w-[240px]">
@@ -1022,6 +1049,9 @@ function drawMountainTrail(mountain, basecamp) {
     `;
 
     marker.bindPopup(popupHtml);
+    marker.on('click', () => {
+      updateMapTrailSummary(mountain, basecamp, true);
+    });
   });
 }
 
@@ -1104,9 +1134,9 @@ function updateInspectorPanel(mountain, basecamp) {
 }
 
 /**
- * Update Floating Trail Summary Overlay on the Map
+ * Update Floating Trail Summary Overlay on the Map (Hanya muncul saat dipencet jika showBanner = true)
  */
-function updateMapTrailSummary(mountain, basecamp) {
+function updateMapTrailSummary(mountain, basecamp, showBanner = false) {
   const banner = document.getElementById('map-trail-summary');
   if (!banner) return;
 
@@ -1132,7 +1162,11 @@ function updateMapTrailSummary(mountain, basecamp) {
   const gainEl = document.getElementById('map-trail-gain');
   if (gainEl) gainEl.innerText = `${bcElev.toLocaleString('id-ID')}m ➔ ${mountain.ketinggian.toLocaleString('id-ID')}m (+${gain.toLocaleString('id-ID')}m)`;
 
-  banner.classList.remove('hidden');
+  if (showBanner) {
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
 }
 
 function closeMapTrailSummary() {
@@ -1486,6 +1520,9 @@ async function saveCoordinatesBatch() {
     if (json.success) {
       showToast(json.message || 'Koordinat berhasil disimpan ke database!', 'success');
 
+      // Koordinat diedit manual -> geometri jalur OSM lama tidak berlaku lagi, garis mengikuti titik baru
+      if (bc) bc.jalurGeo = null;
+
       // Update in-memory models
       if (bcWp && bc) {
         bc.latitude = bcWp.lat;
@@ -1598,40 +1635,15 @@ function closeInspector() {
 }
 
 /**
- * 10. Filters & Toggles
+ * 10. Search Clear Helper
  */
-function applyFilters() {
-  filterOpen = document.getElementById('toggle-open')?.checked ?? true;
-  filterWater = document.getElementById('toggle-water')?.checked ?? false;
-  filterBeginner = document.getElementById('toggle-beginner')?.checked ?? false;
-
-  renderMountainCards();
-  renderMountainPins();
-}
-
-function resetFilters() {
-  activeRegion = 'all';
-  filterOpen = false;
-  filterWater = false;
-  filterBeginner = false;
-  searchQuery = '';
-
-  const searchInput = document.getElementById('mountain-search');
-  if (searchInput) searchInput.value = '';
-
-  document.getElementById('toggle-open').checked = false;
-  document.getElementById('toggle-water').checked = false;
-  document.getElementById('toggle-beginner').checked = false;
-
-  setProvinceFilter('all');
-}
-
 function clearSearch() {
   const input = document.getElementById('mountain-search');
   if (input) input.value = '';
   searchQuery = '';
   document.getElementById('clear-search')?.classList.add('hidden');
   renderMountainCards();
+  renderMountainPins();
 }
 
 /**
@@ -1847,12 +1859,13 @@ function filterPosTable() {
   // Apply search query
   if (q !== '') {
     posList = posList.filter(p => {
-      const matchName = p.namaPos.toLowerCase().includes(q);
-      const matchGunung = p.gunungNama.toLowerCase().includes(q);
-      const matchVia = p.jalurVia.toLowerCase().includes(q);
+      const matchName = matchesSearchQuery(p.namaPos, q);
+      const matchGunung = matchesSearchQuery(p.gunungNama, q);
+      const matchVia = matchesSearchQuery(p.jalurVia, q);
+      const matchKab = matchesSearchQuery(p.kabupaten, q);
       const matchUrutan = String(p.urutan).includes(q);
       const matchElev = p.elevasi ? String(p.elevasi).includes(q) : false;
-      return matchName || matchGunung || matchVia || matchUrutan || matchElev;
+      return matchName || matchGunung || matchVia || matchKab || matchUrutan || matchElev;
     });
   }
 
@@ -1964,10 +1977,11 @@ function filterBasecampTable() {
     if (status !== 'all' && b.status !== status) return false;
 
     if (q.trim() !== '') {
-      const matchName = b.nama.toLowerCase().includes(q);
-      const matchVia = b.jalurVia.toLowerCase().includes(q);
-      const matchGunung = b.gunungNama.toLowerCase().includes(q);
-      if (!matchName && !matchVia && !matchGunung) return false;
+      const matchName = matchesSearchQuery(b.nama, q);
+      const matchVia = matchesSearchQuery(b.jalurVia, q);
+      const matchGunung = matchesSearchQuery(b.gunungNama, q);
+      const matchKab = matchesSearchQuery(b.kabupaten, q);
+      if (!matchName && !matchVia && !matchGunung && !matchKab) return false;
     }
 
     return true;
@@ -2018,11 +2032,138 @@ function viewBasecampOnMap(gunungId, basecampId) {
 }
 
 /**
+ * Helper: Otomatis perbaiki input koordinat Pulau Jawa (ubah Latitude positif ke minus Lintang Selatan & tukar jika terbalik)
+ */
+function autoFixJavaCoordInput(latInputId, lngInputId) {
+  const latEl = document.getElementById(latInputId);
+  const lngEl = document.getElementById(lngInputId);
+  if (!latEl || !lngEl) return;
+
+  let rawLat = String(latEl.value || '').trim().replace(',', '.');
+  let rawLng = String(lngEl.value || '').trim().replace(',', '.');
+  let lat = parseFloat(rawLat);
+  let lng = parseFloat(rawLng);
+
+  if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) > 90 && Math.abs(lng) <= 15) {
+    const tmp = lat;
+    lat = lng;
+    lng = tmp;
+    showToast('Posisi Latitude & Longitude terbalik, otomatis disesuaikan!', 'info');
+  }
+
+  if (!isNaN(lat) && lat > 4.5 && lat < 11.5) {
+    lat = -Math.abs(lat);
+    latEl.value = lat;
+    showToast(`Koordinat Pulau Jawa berada di Lintang Selatan, Latitude otomatis disesuaikan ke ${lat}`, 'info');
+  } else if (!isNaN(lat)) {
+    latEl.value = lat;
+  }
+
+  if (!isNaN(lng) && lng < -100 && lng > -120) {
+    lng = Math.abs(lng);
+    lngEl.value = lng;
+  } else if (!isNaN(lng)) {
+    lngEl.value = lng;
+  }
+}
+
+/**
+ * Cari Koordinat Puncak Otomatis berdasarkan Nama Gunung / Kabupaten di Pulau Jawa
+ */
+async function autoLookupMountainCoords() {
+  const nama = (document.getElementById('form-gunung-nama')?.value || '').trim();
+  const kab = (document.getElementById('form-gunung-kabupaten')?.value || '').trim();
+  const prov = (document.getElementById('form-gunung-provinsi')?.value || 'Jawa Barat').trim();
+
+  if (!nama && !kab) {
+    showToast('Isi Nama Gunung atau Kabupaten terlebih dahulu', 'warning');
+    return;
+  }
+
+  // Kamus cepat gunung & kabupaten populer Jawa
+  const KNOWN_COORDS = {
+    'pangradinan': [-7.044331, 107.838104],
+    'cikancung': [-7.044331, 107.838104],
+    'bandung': [-7.0450, 107.6800],
+    'garut': [-7.2500, 107.8600],
+    'bogor': [-6.6800, 106.8200],
+    'cianjur': [-6.7800, 107.0200],
+    'sukabumi': [-6.8200, 106.8500],
+    'sumedang': [-6.8400, 107.9200],
+    'majalengka': [-6.8800, 108.3500],
+    'kuningan': [-6.9200, 108.4200],
+    'tasikmalaya': [-7.2800, 108.1500],
+    'purwakarta': [-6.5800, 107.4200],
+    'wonosobo': [-7.2600, 109.9500],
+    'magelang': [-7.4200, 110.3500],
+    'boyolali': [-7.4800, 110.4400],
+    'karanganyar': [-7.6200, 111.1500],
+    'banyumas': [-7.2500, 109.2100],
+    'pemalang': [-7.2200, 109.2200],
+    'malang': [-7.9500, 112.6200],
+    'pasuruan': [-7.7500, 112.5800],
+    'mojokerto': [-7.6500, 112.5800],
+    'banyuwangi': [-8.1200, 114.1500],
+    'bondowoso': [-8.0200, 114.0500],
+    'sleman': [-7.5800, 110.4300],
+    'gunung kidul': [-7.8400, 110.5500]
+  };
+
+  const searchLower = `${nama} ${kab}`.toLowerCase();
+  for (const [key, coords] of Object.entries(KNOWN_COORDS)) {
+    if (nama.toLowerCase().includes(key)) {
+      document.getElementById('form-gunung-lat').value = coords[0];
+      document.getElementById('form-gunung-lng').value = coords[1];
+      showToast(`📍 Koordinat ${nama} ditemukan: ${coords[0]}, ${coords[1]}`, 'success');
+      return;
+    }
+  }
+
+  try {
+    showToast('Mencari koordinat peta Pulau Jawa...', 'info');
+    const q = encodeURIComponent(`${nama} ${kab} ${prov} Indonesia`);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&viewbox=105.0,-5.5,115.0,-9.0&bounded=1&limit=1`);
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      const lat = Number(parseFloat(data[0].lat).toFixed(6));
+      const lng = Number(parseFloat(data[0].lon).toFixed(6));
+      document.getElementById('form-gunung-lat').value = lat;
+      document.getElementById('form-gunung-lng').value = lng;
+      showToast(`📍 Koordinat ditemukan: ${lat}, ${lng}`, 'success');
+      return;
+    }
+  } catch (e) {
+    // Fallback ke kamus kabupaten/provinsi jika offline
+  }
+
+  for (const [key, coords] of Object.entries(KNOWN_COORDS)) {
+    if (searchLower.includes(key)) {
+      document.getElementById('form-gunung-lat').value = coords[0];
+      document.getElementById('form-gunung-lng').value = coords[1];
+      showToast(`📍 Koordinat wilayah ${kab || prov} diterapkan: ${coords[0]}, ${coords[1]}`, 'success');
+      return;
+    }
+  }
+
+  const provDefaults = {
+    'Jawa Barat': [-7.0500, 107.7500],
+    'Jawa Tengah': [-7.3500, 110.1500],
+    'DIY': [-7.7500, 110.4500],
+    'Jawa Timur': [-7.8500, 112.6000]
+  };
+  const def = provDefaults[prov] || [-7.2500, 109.5000];
+  document.getElementById('form-gunung-lat').value = def[0];
+  document.getElementById('form-gunung-lng').value = def[1];
+  showToast(`📍 Koordinat default ${prov} diisi: ${def[0]}, ${def[1]}`, 'info');
+}
+
+/**
  * 14. Basecamp Modal (Create & Edit)
  */
 function openBasecampModal(editId = null) {
   const modal = document.getElementById('basecamp-modal');
   const selectGunung = document.getElementById('form-bc-gunung');
+  const posGenBox = document.getElementById('bc-modal-pos-generator');
   
   selectGunung.innerHTML = allMountains.map(m => `
     <option value="${m.id}">${m.nama} (${m.provinsi})</option>
@@ -2038,14 +2179,18 @@ function openBasecampModal(editId = null) {
       document.getElementById('form-bc-jalur').value = b.jalurVia;
       document.getElementById('form-bc-lat').value = b.latitude;
       document.getElementById('form-bc-lng').value = b.longitude;
-      document.getElementById('form-bc-elevasi').value = b.elevasi || 1800;
+      document.getElementById('form-bc-elevasi').value = b.elevasi || 1400;
       document.getElementById('form-bc-status').value = b.status || 'Buka';
       document.getElementById('form-bc-kontak').value = b.kontak || '';
+      posGenBox?.classList.add('hidden');
     }
   } else {
-    document.getElementById('modal-basecamp-title').innerText = 'Tambah Basecamp Baru';
+    document.getElementById('modal-basecamp-title').innerText = 'Tambah Basecamp & Jalur Pos Baru';
     document.getElementById('basecamp-form').reset();
     document.getElementById('form-bc-id').value = '';
+    const posCountEl = document.getElementById('form-bc-pos-count');
+    if (posCountEl) posCountEl.value = 3;
+    posGenBox?.classList.remove('hidden');
     if (selectedMountain) {
       selectGunung.value = selectedMountain.id;
     }
@@ -2072,19 +2217,20 @@ function editBasecamp(id) {
 
 async function submitBasecampForm(e) {
   e.preventDefault();
+  autoFixJavaCoordInput('form-bc-lat', 'form-bc-lng');
   const id = document.getElementById('form-bc-id').value;
   const payload = {
     gunungId: parseInt(document.getElementById('form-bc-gunung').value, 10),
     nama: document.getElementById('form-bc-nama').value,
     jalurVia: document.getElementById('form-bc-jalur').value,
-    latitude: parseFloat(document.getElementById('form-bc-lat').value),
-    longitude: parseFloat(document.getElementById('form-bc-lng').value),
-    elevasi: parseInt(document.getElementById('form-bc-elevasi').value, 10) || 1800,
+    latitude: document.getElementById('form-bc-lat').value ? parseFloat(document.getElementById('form-bc-lat').value) : undefined,
+    longitude: document.getElementById('form-bc-lng').value ? parseFloat(document.getElementById('form-bc-lng').value) : undefined,
+    elevasi: parseInt(document.getElementById('form-bc-elevasi').value, 10) || undefined,
     status: document.getElementById('form-bc-status').value,
-    kontak: document.getElementById('form-bc-kontak').value
+    kontak: document.getElementById('form-bc-kontak').value,
+    jumlahPos: parseInt(document.getElementById('form-bc-pos-count')?.value, 10) || 0,
+    posNames: document.getElementById('form-bc-pos-names')?.value || ''
   };
-
-  const targetGId = payload.gunungId;
 
   try {
     const url = id ? `/api/basecamp/${id}` : '/api/basecamp';
@@ -2102,10 +2248,12 @@ async function submitBasecampForm(e) {
       closeBasecampModal();
       await loadMountains();
       await loadBasecamps();
-      if (targetGId) {
-        selectedMountain = allMountains.find(m => m.id === targetGId) || selectedMountain;
-      }
+      await loadStatistics();
       renderBasecampTable();
+      if (json.data && json.data.gunungId) {
+        selectMountain(json.data.gunungId, true);
+        switchJalur(json.data.gunungId, json.data.id);
+      }
       if (document.getElementById('view-detail')?.classList.contains('hidden') === false) {
         renderDetailView();
       }
@@ -2140,6 +2288,7 @@ async function deleteBasecampItem(id) {
           selectedBasecamp = (selectedMountain.basecamps && selectedMountain.basecamps.length > 0) ? selectedMountain.basecamps[0] : null;
         }
       }
+      await loadStatistics();
       renderBasecampTable();
       if (document.getElementById('view-detail')?.classList.contains('hidden') === false) {
         renderDetailView();
@@ -2153,7 +2302,7 @@ async function deleteBasecampItem(id) {
 }
 
 /**
- * 14B. Admin: Kelola & Rename Data Gunung (CRUD)
+ * 14B. Admin: Kelola & Rename Data Gunung + Jalur Via & Pos (CRUD)
  */
 function openGunungModal(id = null) {
   const modal = document.getElementById('gunung-modal');
@@ -2161,11 +2310,18 @@ function openGunungModal(id = null) {
 
   const btnDelete = document.getElementById('btn-delete-gunung');
   const modalTitle = document.getElementById('modal-gunung-title');
+  const existingSection = document.getElementById('gunung-existing-jalurs-section');
+  const existingList = document.getElementById('gunung-existing-jalurs-list');
+
+  // Reset kolom tambah via & pos baru
+  if (document.getElementById('form-gunung-via')) document.getElementById('form-gunung-via').value = '';
+  if (document.getElementById('form-gunung-bc-elev')) document.getElementById('form-gunung-bc-elev').value = '';
+  if (document.getElementById('form-gunung-pos-names')) document.getElementById('form-gunung-pos-names').value = '';
 
   if (id) {
     const m = allMountains.find(item => item.id === id);
     if (m) {
-      modalTitle.innerText = `Rename & Edit: ${m.nama}`;
+      modalTitle.innerText = `Kelola Gunung, Via & Pos: ${m.nama}`;
       document.getElementById('form-gunung-id').value = m.id;
       document.getElementById('form-gunung-nama').value = m.nama;
       document.getElementById('form-gunung-ketinggian').value = m.ketinggian;
@@ -2175,12 +2331,37 @@ function openGunungModal(id = null) {
       document.getElementById('form-gunung-deskripsi').value = m.deskripsi || '';
       document.getElementById('form-gunung-lat').value = m.latitude || '';
       document.getElementById('form-gunung-lng').value = m.longitude || '';
+      if (document.getElementById('form-gunung-pos-count')) document.getElementById('form-gunung-pos-count').value = '';
       btnDelete?.classList.remove('hidden');
+
+      // Tampilkan daftar jalur & pos yang sudah ada
+      if (existingSection && existingList) {
+        existingSection.classList.remove('hidden');
+        if (m.basecamps && m.basecamps.length > 0) {
+          existingList.innerHTML = m.basecamps.map(b => `
+            <div class="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-surface-container text-[11px]">
+              <div class="truncate pr-2">
+                <strong class="text-primary font-headline">Via ${b.jalurVia}</strong>
+                <span class="text-on-surface-variant font-mono ml-1">(${b.elevasi || 1000} mdpl · ${b.pos.length} Pos)</span>
+                <div class="text-[10px] text-outline truncate">${b.pos.map(p => p.namaPos).join(' ➔ ') || 'Belum ada pos'}</div>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button type="button" onclick="closeGunungModal(); selectMountain(${m.id}, false); openPosModal(null, ${b.id});" class="px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary hover:text-white font-headline font-bold text-[10px]" title="Tambah Pos ke Via ${b.jalurVia}">+ Pos</button>
+                <button type="button" onclick="closeGunungModal(); selectMountain(${m.id}, true); switchJalur(${m.id}, ${b.id}); switchView('detail');" class="px-2 py-0.5 rounded bg-surface-container text-on-surface hover:bg-secondary hover:text-white font-headline font-bold text-[10px]" title="Kelola Detail Pos">Detail Pos</button>
+              </div>
+            </div>
+          `).join('');
+        } else {
+          existingList.innerHTML = `<div class="text-on-surface-variant italic text-[11px]">Belum ada Jalur Via & Pos. Silakan isi form "Isi / Tambah Jalur Via & Pos" di bawah!</div>`;
+        }
+      }
     }
   } else {
-    modalTitle.innerText = 'Tambah Data Gunung Baru';
+    modalTitle.innerText = 'Tambah Gunung, Jalur Via & Pos Baru';
     document.getElementById('gunung-form').reset();
     document.getElementById('form-gunung-id').value = '';
+    if (document.getElementById('form-gunung-pos-count')) document.getElementById('form-gunung-pos-count').value = 3;
+    existingSection?.classList.add('hidden');
     btnDelete?.classList.add('hidden');
   }
 
@@ -2201,6 +2382,8 @@ function enableGunungCoordPicker() {
 
 async function submitGunungForm(e) {
   e.preventDefault();
+  autoFixJavaCoordInput('form-gunung-lat', 'form-gunung-lng');
+
   const id = document.getElementById('form-gunung-id').value;
   const payload = {
     nama: document.getElementById('form-gunung-nama').value,
@@ -2210,7 +2393,11 @@ async function submitGunungForm(e) {
     statusJalur: document.getElementById('form-gunung-status').value,
     deskripsi: document.getElementById('form-gunung-deskripsi').value,
     latitude: parseFloat(document.getElementById('form-gunung-lat').value) || undefined,
-    longitude: parseFloat(document.getElementById('form-gunung-lng').value) || undefined
+    longitude: parseFloat(document.getElementById('form-gunung-lng').value) || undefined,
+    jalurVia: document.getElementById('form-gunung-via')?.value || '',
+    bcElevasi: parseInt(document.getElementById('form-gunung-bc-elev')?.value, 10) || undefined,
+    jumlahPos: parseInt(document.getElementById('form-gunung-pos-count')?.value, 10) || undefined,
+    posNames: document.getElementById('form-gunung-pos-names')?.value || ''
   };
 
   try {
@@ -2227,11 +2414,12 @@ async function submitGunungForm(e) {
     if (json.success) {
       showToast(json.message, 'success');
       closeGunungModal();
-      const targetId = id ? parseInt(id, 10) : null;
+      const targetId = json.data?.id || (id ? parseInt(id, 10) : null);
       await loadMountains();
+      await loadBasecamps();
       await loadStatistics();
       if (targetId) {
-        selectedMountain = allMountains.find(item => item.id === targetId) || selectedMountain;
+        selectMountain(targetId, true);
       }
       if (selectedMountain && selectedBasecamp) {
         updateInspectorPanel(selectedMountain, selectedBasecamp);
@@ -3027,9 +3215,8 @@ function openArahRutePendakianModal() {
               <span class="font-headline font-bold text-secondary text-[11px]">${seg.estTimeFormatted}</span>
             </div>
             <div class="flex items-center gap-3 text-[11px] text-on-surface-variant font-mono mt-0.5">
-              <span>Jarak: <strong>${seg.distanceFormatted}</strong></span>
+              <span>Elevasi: <strong>${seg.toElev ? seg.toElev.toLocaleString('id-ID') : '-'} mdpl</strong></span>
               <span>Tanjakan: <strong class="text-primary">${seg.elevGainFormatted}</strong></span>
-              <span>Elevasi: ${seg.toElev} mdpl</span>
             </div>
             <p class="text-[11px] text-outline mt-1 italic">${seg.keterangan}</p>
           </div>
@@ -3156,6 +3343,7 @@ function setupEventListeners() {
       clearBtn?.classList.add('hidden');
     }
     renderMountainCards();
+    renderMountainPins();
   });
 }
 
@@ -3489,8 +3677,10 @@ function renderTripPlanUI(plan) {
   if (ascEl) ascEl.innerText = metrics.totalAscentFormatted || '-- Jam';
   if (descEl) descEl.innerText = metrics.totalDescentFormatted || '-- Jam';
   if (totalEl) totalEl.innerText = metrics.totalRoundtripFormatted || '-- Jam';
-  if (distEl) distEl.innerText = `${metrics.totalDistanceKm || 0} km (Naik)`;
-  if (gainEl) gainEl.innerText = `+${metrics.totalGainM || 0} m Gain · PP ${metrics.totalRoundtripDistanceKm || 0} km`;
+  const peakMdpl = plan.mountain?.ketinggian || plannerActiveMountain?.ketinggian || 0;
+  const bcMdpl = plan.basecamp?.elevasi || plannerActiveBasecamp?.elevasi || 1400;
+  if (distEl) distEl.innerText = `${peakMdpl.toLocaleString('id-ID')} mdpl`;
+  if (gainEl) gainEl.innerText = `BC ${bcMdpl.toLocaleString('id-ID')} mdpl · +${(metrics.totalGainM || 0).toLocaleString('id-ID')} mdpl`;
 
   // 3. Pos Count Badge
   const posBadge = document.getElementById('planner-pos-count-badge');
@@ -3756,7 +3946,7 @@ function calculateLocalTripPlan(mountain, basecamp, direction, pace, timeStr) {
         type: 'pos',
         elevasi: seg.toElev,
         activity: `Tiba di ${seg.toName} · Istirahat ${seg.restMinutes} Menit`,
-        note: `${seg.adaAir ? '💧 Ada air. ' : ''}${seg.areaCamp ? '⛺ Area camp. ' : ''}+${seg.distanceKm} km (+${seg.gainM}m).`
+        note: `${seg.adaAir ? '💧 Ada air. ' : ''}${seg.areaCamp ? '⛺ Area camp. ' : ''}Elevasi ${seg.toElev ? seg.toElev.toLocaleString('id-ID') : '-'} mdpl (+${seg.gainM} mdpl).`
       });
       curMins += seg.restMinutes;
     }

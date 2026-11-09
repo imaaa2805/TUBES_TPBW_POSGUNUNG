@@ -213,7 +213,7 @@
           <div class="px-3 py-2 bg-surface-container-low border-b border-surface-container flex items-center justify-between">
             <div class="flex items-center gap-4">
               <label class="flex items-center gap-1.5 cursor-pointer select-none">
-                <input id="toggle-open" type="checkbox" checked onchange="applyFilters()" class="sr-only peer">
+                <input id="toggle-open" type="checkbox" onchange="applyFilters()" class="sr-only peer">
                 <div class="w-7 h-4 bg-outline-variant peer-checked:bg-primary-container rounded-full relative transition-colors">
                   <div class="w-3 h-3 bg-white rounded-full absolute top-0.5 left-0.5 peer-checked:translate-x-3 transition-transform shadow-sm"></div>
                 </div>
@@ -323,38 +323,31 @@
           <!-- Leaflet Interactive Map Container -->
           <div id="map" class="w-full h-full z-0 relative"></div>
 
-          <!-- FLOATING TRAIL VISUALIZATION SUMMARY OVERLAY (BC - PUNCAK) -->
-          <div id="map-trail-summary" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-30 max-w-[95%] sm:max-w-2xl bg-surface-container-lowest/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-primary/20 p-3 sm:px-4 sm:py-3 transition-all duration-300 pointer-events-auto">
-            <div class="flex items-center justify-between gap-3 sm:gap-4">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-primary text-on-primary flex items-center justify-center shrink-0 shadow-sm">
-                  <span class="material-symbols-outlined text-[24px]">alt_route</span>
+          <!-- FLOATING TRAIL VISUALIZATION SUMMARY OVERLAY (Hanya muncul saat jalur/pin dipencet) -->
+          <div id="map-trail-summary" class="hidden absolute bottom-10 left-1/2 -translate-x-1/2 z-30 w-max max-w-[94%] bg-surface-container-lowest/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-primary/20 px-4 py-2.5 transition-all duration-300 pointer-events-auto">
+            <div class="flex items-center justify-between gap-4 flex-nowrap">
+              <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-primary text-on-primary flex items-center justify-center shrink-0 shadow-sm">
+                  <span class="material-symbols-outlined text-[20px]">alt_route</span>
                 </div>
-                <div>
-                  <div class="flex items-center gap-2 flex-wrap">
+                <div class="whitespace-nowrap">
+                  <div class="flex items-center gap-2">
                     <span id="map-trail-title" class="font-headline font-bold text-xs sm:text-sm text-primary tracking-tight">Gunung Lawu · Via Candi Cetho</span>
                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary font-headline text-[10px] font-bold">
                       <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-                      VISUALISASI BC ➔ PUNCAK
+                      BC ➔ PUNCAK
                     </span>
                   </div>
-                  <div class="flex items-center gap-2 sm:gap-3 text-xs mt-1 flex-wrap">
-                    <div class="flex items-center gap-1 font-headline font-bold text-on-surface bg-surface-container-low px-2 py-0.5 rounded-lg border border-surface-container">
-                      <span class="material-symbols-outlined text-[15px] text-primary">straighten</span>
-                      <span>Jarak: <strong id="map-trail-dist" class="text-primary font-mono font-bold">7.31 KM</strong></span>
-                    </div>
-                    <div class="flex items-center gap-1 font-headline font-bold text-on-surface bg-surface-container-low px-2 py-0.5 rounded-lg border border-surface-container">
-                      <span class="material-symbols-outlined text-[15px] text-secondary">flag</span>
-                      <span>Jumlah: <strong id="map-trail-pos" class="text-secondary font-mono font-bold">12 Pos</strong></span>
-                    </div>
-                    <div class="hidden sm:flex items-center gap-1 font-headline text-on-surface-variant text-[11px]">
-                      <span class="material-symbols-outlined text-[14px]">terrain</span>
-                      <span id="map-trail-gain">1.450m ➔ 3.265m (+1.815m)</span>
-                    </div>
+                  <div class="flex items-center gap-2 text-xs mt-0.5">
+                    <span class="font-headline font-bold text-on-surface">Puncak: <strong id="map-trail-dist" class="text-primary font-mono font-bold">3.265 mdpl</strong></span>
+                    <span class="text-outline-variant">•</span>
+                    <span class="font-headline font-bold text-on-surface">Jumlah: <strong id="map-trail-pos" class="text-secondary font-mono font-bold">12 Pos</strong></span>
+                    <span class="hidden sm:inline text-outline-variant">•</span>
+                    <span id="map-trail-gain" class="hidden sm:inline font-headline text-on-surface-variant text-[11px]">1.450m ➔ 3.265m (+1.815m)</span>
                   </div>
                 </div>
               </div>
-              <div class="flex items-center gap-1.5 shrink-0 flex-wrap">
+              <div class="flex items-center gap-1.5 shrink-0">
                 <button onclick="openTripPlannerModal()" class="px-3 py-1.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary text-xs font-headline font-bold flex items-center gap-1 transition-all shadow-sm active:scale-95" title="Estimasi Waktu & Rekomendasi Jam Mulai">
                   <span class="material-symbols-outlined text-[16px]">schedule</span>
                   <span>Trip Planner</span>
@@ -616,19 +609,19 @@
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="font-headline font-bold text-on-surface block mb-1">Latitude *</label>
-            <input id="form-bc-lat" step="any" required placeholder="-7.4812" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none font-mono" type="number">
+            <label class="font-headline font-bold text-on-surface block mb-1">Latitude Basecamp (LS -)</label>
+            <input id="form-bc-lat" step="any" onblur="autoFixJavaCoordInput('form-bc-lat', 'form-bc-lng')" placeholder="Otomatis / -7.0365" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none font-mono" type="number">
           </div>
           <div>
-            <label class="font-headline font-bold text-on-surface block mb-1">Longitude *</label>
-            <input id="form-bc-lng" step="any" required placeholder="110.4281" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none font-mono" type="number">
+            <label class="font-headline font-bold text-on-surface block mb-1">Longitude Basecamp (BT +)</label>
+            <input id="form-bc-lng" step="any" onblur="autoFixJavaCoordInput('form-bc-lat', 'form-bc-lng')" placeholder="Otomatis / 107.8342" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none font-mono" type="number">
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="font-headline font-bold text-on-surface block mb-1">Elevasi Basecamp (MDPL)</label>
-            <input id="form-bc-elevasi" placeholder="1800" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none font-mono" type="number">
+            <input id="form-bc-elevasi" placeholder="1400" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none font-mono" type="number">
           </div>
           <div>
             <label class="font-headline font-bold text-on-surface block mb-1">Status Jalur</label>
@@ -638,6 +631,21 @@
               <option value="Tutup">Tutup</option>
             </select>
           </div>
+        </div>
+
+        <!-- Tambah Pos Sekaligus di Basecamp -->
+        <div id="bc-modal-pos-generator" class="p-3 bg-primary/5 rounded-xl border border-primary/20 flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="font-headline font-bold text-primary text-[11px] flex items-center gap-1">
+              <span class="material-symbols-outlined text-[15px]">format_list_numbered</span>
+              Buat Titik Pos Otomatis di Jalur Ini
+            </span>
+            <div class="flex items-center gap-1.5">
+              <label class="text-[10px] text-on-surface-variant font-bold">Jumlah Pos:</label>
+              <input id="form-bc-pos-count" type="number" min="0" max="15" placeholder="3" class="w-14 bg-white border border-surface-container rounded-lg px-2 py-1 font-mono font-bold text-xs text-center">
+            </div>
+          </div>
+          <input id="form-bc-pos-names" type="text" placeholder="Nama Pos (opsional, pisah koma): Pos 1, Pos 2, Pos 3" class="w-full bg-white border border-surface-container rounded-lg p-2 text-xs text-on-surface focus:outline-none">
         </div>
 
         <div>
@@ -668,12 +676,12 @@
 
   <!-- ==================== MODAL: ADMIN KELOLA & RENAME GUNUNG ==================== -->
   <div id="gunung-modal" class="fixed inset-0 z-50 hidden bg-inverse-surface/50 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-surface-container-lowest rounded-2xl shadow-2xl border border-surface-container w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+    <div class="bg-surface-container-lowest rounded-2xl shadow-2xl border border-surface-container w-full max-w-xl overflow-hidden flex flex-col max-h-[92vh]">
       
       <div class="p-4 bg-surface-container-low border-b border-surface-container flex items-center justify-between">
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-primary text-[22px]">terrain</span>
-          <h3 id="modal-gunung-title" class="font-headline font-bold text-lg text-primary">Admin: Rename & Edit Gunung</h3>
+          <h3 id="modal-gunung-title" class="font-headline font-bold text-lg text-primary">Admin: Tambah / Edit Gunung, Via & Pos</h3>
         </div>
         <button onclick="closeGunungModal()" class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg">
           <span class="material-symbols-outlined text-[20px]">close</span>
@@ -684,14 +692,14 @@
         <input type="hidden" id="form-gunung-id">
 
         <div>
-          <label class="font-headline font-bold text-on-surface block mb-1">Nama Gunung (Rename) *</label>
-          <input id="form-gunung-nama" required placeholder="Contoh: Gunung Cikuray" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none font-bold text-sm" type="text">
+          <label class="font-headline font-bold text-on-surface block mb-1">Nama Gunung *</label>
+          <input id="form-gunung-nama" required placeholder="Contoh: Gunung Pangradinan" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none font-bold text-sm" type="text">
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="font-headline font-bold text-on-surface block mb-1">Ketinggian (MDPL) *</label>
-            <input id="form-gunung-ketinggian" required placeholder="2821" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none font-mono" type="number">
+            <label class="font-headline font-bold text-on-surface block mb-1">Ketinggian Puncak (MDPL) *</label>
+            <input id="form-gunung-ketinggian" required placeholder="1236" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none font-mono" type="number">
           </div>
           <div>
             <label class="font-headline font-bold text-on-surface block mb-1">Status Jalur Pendakian</label>
@@ -715,33 +723,99 @@
           </div>
           <div>
             <label class="font-headline font-bold text-on-surface block mb-1">Kabupaten / Kota *</label>
-            <input id="form-gunung-kabupaten" required placeholder="Contoh: Garut" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none" type="text">
+            <input id="form-gunung-kabupaten" required placeholder="Contoh: Bandung (Cikancung)" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none" type="text">
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label class="font-headline font-bold text-on-surface">Latitude Puncak</label>
-              <button type="button" onclick="enableGunungCoordPicker()" class="text-secondary hover:underline font-headline font-bold text-[10px] flex items-center gap-0.5">
-                <span class="material-symbols-outlined text-[12px]">my_location</span>
+        <!-- Koordinat Puncak dengan Auto-Fix Lintang Selatan (-) & Cari Otomatis -->
+        <div class="p-3 bg-surface-container-low rounded-xl border border-surface-container flex flex-col gap-2">
+          <div class="flex items-center justify-between flex-wrap gap-1">
+            <span class="font-headline font-bold text-on-surface text-xs flex items-center gap-1">
+              <span class="material-symbols-outlined text-[15px] text-primary">pin_drop</span>
+              Koordinat Puncak (Pulau Jawa: Latitude Minus / LS)
+            </span>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="autoLookupMountainCoords()" class="px-2 py-1 rounded-lg bg-primary/10 hover:bg-primary text-primary hover:text-white font-headline font-bold text-[10px] flex items-center gap-1 transition-colors" title="Cari otomatis koordinat gunung/kabupaten di Pulau Jawa">
+                <span class="material-symbols-outlined text-[13px]">travel_explore</span>
+                <span>Cari Koordinat Otomatis</span>
+              </button>
+              <button type="button" onclick="enableGunungCoordPicker()" class="px-2 py-1 rounded-lg bg-secondary/15 hover:bg-secondary text-secondary hover:text-white font-headline font-bold text-[10px] flex items-center gap-1 transition-colors">
+                <span class="material-symbols-outlined text-[13px]">my_location</span>
                 <span>Klik Peta</span>
               </button>
             </div>
-            <input id="form-gunung-lat" step="any" placeholder="-7.310" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none font-mono" type="number">
           </div>
-          <div>
-            <label class="font-headline font-bold text-on-surface block mb-1">Longitude Puncak</label>
-            <input id="form-gunung-lng" step="any" placeholder="107.863" class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none font-mono" type="number">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-[10px] font-headline font-bold text-on-surface-variant block mb-0.5">Latitude Puncak (LS / Negatif -)</label>
+              <input id="form-gunung-lat" step="any" onblur="autoFixJavaCoordInput('form-gunung-lat', 'form-gunung-lng')" placeholder="-7.044331" class="w-full bg-white border border-surface-container rounded-xl p-2 text-on-surface focus:outline-none font-mono font-bold" type="number">
+            </div>
+            <div>
+              <label class="text-[10px] font-headline font-bold text-on-surface-variant block mb-0.5">Longitude Puncak (BT / Positif +)</label>
+              <input id="form-gunung-lng" step="any" onblur="autoFixJavaCoordInput('form-gunung-lat', 'form-gunung-lng')" placeholder="107.838104" class="w-full bg-white border border-surface-container rounded-xl p-2 text-on-surface focus:outline-none font-mono font-bold" type="number">
+            </div>
           </div>
+          <p class="text-[10px] text-on-surface-variant leading-tight">
+            💡 <strong>Catatan:</strong> Karena Pulau Jawa berada di Lintang Selatan (LS), nilai Latitude selalu <strong>minus (-)</strong> (antara <code>-5.8</code> s/d <code>-8.8</code>). Jika Anda mengetik positif (misal <code>7.044331</code>), sistem otomatis memperbaikinya menjadi <code>-7.044331</code> agar tidak melenceng ke laut.
+          </p>
+        </div>
+
+        <!-- Daftar Jalur Via & Pos yang Sudah Ada (Muncul saat Edit Gunung) -->
+        <div id="gunung-existing-jalurs-section" class="hidden p-3 bg-surface-container-low rounded-xl border border-surface-container flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="font-headline font-bold text-primary text-xs flex items-center gap-1">
+              <span class="material-symbols-outlined text-[16px]">alt_route</span>
+              Jalur Via & Pos Terdaftar di Gunung Ini:
+            </span>
+            <button type="button" onclick="closeGunungModal(); openBasecampModal();" class="text-[10px] font-headline font-bold text-primary hover:underline">+ Buka Kelola Basecamp</button>
+          </div>
+          <div id="gunung-existing-jalurs-list" class="flex flex-col gap-1.5 max-h-36 overflow-y-auto">
+            <!-- Diisi via JS -->
+          </div>
+        </div>
+
+        <!-- Form Langsung Tambah / Isi Jalur Via & Pos Pendakian -->
+        <div class="p-3.5 bg-primary/5 rounded-xl border border-primary/20 flex flex-col gap-2.5">
+          <div class="flex items-center justify-between">
+            <span class="font-headline font-bold text-primary text-xs flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[17px] text-primary">add_road</span>
+              <span>Isi / Tambah Jalur Via (Basecamp) & Pos Pendakian</span>
+            </span>
+            <span class="text-[10px] font-headline font-semibold text-secondary bg-secondary/10 px-2 py-0.5 rounded-full">Otomatis Selaras Peta</span>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2.5">
+            <div class="col-span-2">
+              <label class="font-headline font-bold text-on-surface text-[11px] block mb-1">Nama Jalur / Via (Basecamp)</label>
+              <input id="form-gunung-via" type="text" placeholder="Contoh: Cihanyir / Cikancung" class="w-full bg-white border border-surface-container rounded-xl p-2 text-on-surface focus:outline-none font-semibold">
+            </div>
+            <div>
+              <label class="font-headline font-bold text-on-surface text-[11px] block mb-1">Elevasi BC (MDPL)</label>
+              <input id="form-gunung-bc-elev" type="number" placeholder="Otomatis / 890" class="w-full bg-white border border-surface-container rounded-xl p-2 text-on-surface focus:outline-none font-mono">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2.5">
+            <div>
+              <label class="font-headline font-bold text-on-surface text-[11px] block mb-1">Jumlah Pos</label>
+              <input id="form-gunung-pos-count" type="number" min="1" max="15" placeholder="3" class="w-full bg-white border border-surface-container rounded-xl p-2 text-on-surface focus:outline-none font-mono font-bold">
+            </div>
+            <div class="col-span-2">
+              <label class="font-headline font-bold text-on-surface text-[11px] block mb-1">Nama-Nama Pos (Pisahkan Koma)</label>
+              <input id="form-gunung-pos-names" type="text" placeholder="Contoh: Pos 1 Bambu, Pos 2 Pinus, Pos 3 Sabana" class="w-full bg-white border border-surface-container rounded-xl p-2 text-on-surface focus:outline-none">
+            </div>
+          </div>
+          <p class="text-[10px] text-on-surface-variant leading-tight">
+            ✨ Isi <strong>Nama Jalur / Via</strong> dan <strong>Jumlah Pos</strong> (atau daftar nama pos). Sistem otomatis membuat Basecamp beserta titik Pos 1..N yang tersambung rapi menuju Puncak di peta!
+          </p>
         </div>
 
         <div>
           <label class="font-headline font-bold text-on-surface block mb-1">Deskripsi Kawasan Pendakian</label>
-          <textarea id="form-gunung-deskripsi" rows="3" placeholder="Informasi singkat jalur pendakian..." class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none"></textarea>
+          <textarea id="form-gunung-deskripsi" rows="2" placeholder="Informasi singkat jalur pendakian..." class="w-full bg-surface-container-low border border-surface-container rounded-xl p-2.5 text-on-surface focus:outline-none"></textarea>
         </div>
 
-        <div class="flex items-center justify-between mt-2 pt-3 border-t border-surface-container">
+        <div class="flex items-center justify-between mt-1 pt-3 border-t border-surface-container">
           <button type="button" id="btn-delete-gunung" onclick="deleteActiveGunung()" class="px-3 py-2 rounded-xl text-error hover:bg-error-container/20 font-headline font-bold transition-colors hidden">
             Hapus Gunung
           </button>
@@ -750,7 +824,7 @@
               Batal
             </button>
             <button type="submit" class="px-5 py-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-headline font-bold transition-all shadow-sm">
-              Simpan Perubahan
+              Simpan Gunung & Jalur
             </button>
           </div>
         </div>
@@ -880,9 +954,9 @@
       <div class="p-3 bg-surface-container-lowest border-b border-surface-container flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
           <div class="flex items-center gap-1.5 bg-surface-container-low px-3 py-1.5 rounded-xl border border-surface-container">
-            <span class="material-symbols-outlined text-[16px] text-primary">straighten</span>
-            <span class="text-xs text-on-surface-variant">Jarak Dihitung:</span>
-            <strong id="coord-editor-live-dist" class="font-mono text-sm text-primary font-bold">-- KM</strong>
+            <span class="material-symbols-outlined text-[16px] text-primary">filter_hdr</span>
+            <span class="text-xs text-on-surface-variant">Ketinggian:</span>
+            <strong id="coord-editor-live-dist" class="font-mono text-sm text-primary font-bold">-- mdpl</strong>
           </div>
           <div class="flex items-center gap-1.5 bg-surface-container-low px-3 py-1.5 rounded-xl border border-surface-container">
             <span class="material-symbols-outlined text-[16px] text-secondary">flag</span>
@@ -986,12 +1060,12 @@
       <!-- Route Metric Summary Grid -->
       <div class="p-3.5 bg-surface-container-lowest border-b border-surface-container grid grid-cols-4 gap-2">
         <div class="bg-surface-container-low p-2 rounded-xl text-center">
-          <span class="font-headline text-[9px] uppercase font-bold text-on-surface-variant block">Jarak Jalur</span>
-          <span id="nav-modal-distance" class="font-headline font-bold text-sm text-primary block mt-0.5">-- km</span>
+          <span class="font-headline text-[9px] uppercase font-bold text-on-surface-variant block">Ketinggian</span>
+          <span id="nav-modal-distance" class="font-headline font-bold text-sm text-primary block mt-0.5">-- mdpl</span>
         </div>
         <div class="bg-surface-container-low p-2 rounded-xl text-center">
           <span class="font-headline text-[9px] uppercase font-bold text-on-surface-variant block">Tanjakan (Gain)</span>
-          <span id="nav-modal-gain" class="font-headline font-bold text-sm text-secondary block mt-0.5">+-- m</span>
+          <span id="nav-modal-gain" class="font-headline font-bold text-sm text-secondary block mt-0.5">+-- mdpl</span>
         </div>
         <div class="bg-surface-container-low p-2 rounded-xl text-center">
           <span class="font-headline text-[9px] uppercase font-bold text-on-surface-variant block">Estimasi Waktu</span>
@@ -1219,10 +1293,10 @@
 
           <div class="bg-surface-container-low p-3 rounded-2xl border border-surface-container text-center">
             <span class="font-headline text-[10px] uppercase font-bold text-on-surface-variant block flex items-center justify-center gap-1">
-              <span class="material-symbols-outlined text-[13px]">straighten</span> Jarak & Tanjakan
+              <span class="material-symbols-outlined text-[13px]">filter_hdr</span> Elevasi & Tanjakan
             </span>
-            <span id="planner-metric-dist" class="font-headline font-bold text-sm sm:text-base text-on-surface block mt-1 font-mono">-- km</span>
-            <span id="planner-metric-gain" class="text-[9px] text-secondary font-bold block mt-0.5">+-- m Gain</span>
+            <span id="planner-metric-dist" class="font-headline font-bold text-sm sm:text-base text-on-surface block mt-1 font-mono">-- mdpl</span>
+            <span id="planner-metric-gain" class="text-[9px] text-secondary font-bold block mt-0.5">+-- mdpl Gain</span>
           </div>
         </div>
 

@@ -1,5 +1,20 @@
 const prisma = require('../config/database');
 
+// Geometri jalur nyata (hasil routing OpenStreetMap) disimpan di kolom Basecamp.jalurGeo (JSON [[lat,lng],...]).
+// Dibaca via raw query agar tidak bergantung pada Prisma Client yang sudah di-generate ulang.
+async function getJalurGeoMap() {
+  try {
+    const rows = await prisma.$queryRaw`SELECT id, jalurGeo FROM Basecamp WHERE jalurGeo IS NOT NULL`;
+    const map = new Map();
+    for (const r of rows) {
+      try { map.set(Number(r.id), JSON.parse(r.jalurGeo)); } catch (_) { /* abaikan geometri rusak */ }
+    }
+    return map;
+  } catch (err) {
+    return new Map();
+  }
+}
+
 // Helper untuk format instruksi navigasi berbahasa Indonesia
 function formatManeuverInstruction(step) {
   const maneuver = step.maneuver || {};
@@ -147,6 +162,7 @@ const getAllGunung = async (req, res) => {
     }
 
     // Format output ringkas dan kaya data
+    const geoMap = await getJalurGeoMap();
     const formatted = mountains.map(m => {
       const allPos = m.basecamps.flatMap(b => b.pos);
       const totalAir = allPos.filter(p => p.adaAir).length;
@@ -181,6 +197,7 @@ const getAllGunung = async (req, res) => {
           elevasi: b.elevasi,
           kontak: b.kontak,
           simaksiInfo: b.simaksiInfo,
+          jalurGeo: geoMap.get(b.id) || null,
           pos: b.pos
         }))
       };
@@ -250,13 +267,155 @@ const getGunungById = async (req, res) => {
   }
 };
 
+// Helper normalisasi koordinat Pulau Jawa (otomatis perbaiki Latitude positif menjadi minus Lintang Selatan & tukar jika terbalik)
+function normalizeJavaCoords(rawLat, rawLng, fallbackLat = -7.25, fallbackLng = 110.0) {
+  let lat = rawLat !== undefined && rawLat !== null && rawLat !== '' ? parseFloat(String(rawLat).replace(',', '.')) : fallbackLat;
+  let lng = rawLng !== undefined && rawLng !== null && rawLng !== '' ? parseFloat(String(rawLng).replace(',', '.')) : fallbackLng;
+  if (isNaN(lat)) lat = fallbackLat;
+  if (isNaN(lng)) lng = fallbackLng;
+
+  // Jika pengguna tidak sengaja menukar kolom Latitude (~105..115) dan Longitude (~-5..-9 atau 5..9)
+  if (Math.abs(lat) > 90 && Math.abs(lng) <= 15) {
+    const tmp = lat;
+    lat = lng;
+    lng = tmp;
+  }
+
+  // Pulau Jawa berada di Lintang Selatan (-5.5° s/d -9.0° LS). Jika diinput positif (misal 7.044331), otomatis ubah ke negatif (-7.044331)
+  if (lat > 4.5 && lat < 11.5) {
+    lat = -Math.abs(lat);
+  }
+
+  // Longitude Pulau Jawa berada di Bujur Timur (+105° s/d +115° BT). Jika diinput negatif, otomatis ubah ke positif
+  if (lng < -100 && lng > -120) {
+    lng = Math.abs(lng);
+  }
+
+  return {
+    lat: Number(lat.toFixed(6)),
+    lng: Number(lng.toFixed(6))
+  };
+}
+
+// Helper membuat Basecamp (Jalur Via) beserta titik-titik Pos yang langsung terselaraskan menuju Puncak Gunung
+async function createJalurAndPosForGunung(gunung, jalurData, existingBcCount = 0) {
+  if (!jalurData || !jalurData.jalurVia || !String(jalurData.jalurVia).trim()) return null;
+
+  const jalurVia = String(jalurData.jalurVia).trim().replace(/^via\s+/i, '');
+  const bcNama = jalurData.bcNama && String(jalurData.bcNama).trim()
+    ? String(jalurData.bcNama).trim()
+    : `Basecamp ${jalurVia}`;
+
+  const peakLat = gunung.latitude || -7.25;
+  const peakLng = gunung.longitude || 110.0;
+  const peakElev = gunung.ketinggian || 2000;
+
+  const bcElev = jalurData.bcElevasi && !isNaN(parseInt(jalurData.bcElevasi, 10))
+    ? parseInt(jalurData.bcElevasi, 10)
+    : Math.max(450, Math.round(peakElev * 0.58));
+
+  // Hitung koordinat Basecamp (gunakan input jika valid, atau tempatkan otomatis ~1.8 km di kaki gunung)
+  let bcLat, bcLng;
+  if (jalurData.bcLat && jalurData.bcLng) {
+    const normBc = normalizeJavaCoords(jalurData.bcLat, jalurData.bcLng, peakLat - 0.014, peakLng - 0.010);
+    bcLat = normBc.lat;
+    bcLng = normBc.lng;
+  } else {
+    const angles = [225, 145, 315, 45, 190, 280];
+    const angleDeg = angles[existingBcCount % angles.length];
+    const angleRad = (angleDeg * Math.PI) / 180;
+    const distDeg = peakElev >= 2500 ? 0.024 : (peakElev >= 1800 ? 0.016 : 0.011);
+    bcLat = Number((peakLat + Math.sin(angleRad) * distDeg).toFixed(6));
+    bcLng = Number((peakLng + Math.cos(angleRad) * distDeg).toFixed(6));
+  }
+
+  // Susun daftar nama pos
+  let posNames = [];
+  if (Array.isArray(jalurData.posNames) && jalurData.posNames.length > 0) {
+    posNames = jalurData.posNames.map(s => String(s).trim()).filter(Boolean);
+  } else if (typeof jalurData.posNames === 'string' && jalurData.posNames.trim() !== '') {
+    posNames = jalurData.posNames.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+  }
+
+  const jumlahPos = jalurData.jumlahPos && !isNaN(parseInt(jalurData.jumlahPos, 10))
+    ? Math.max(0, Math.min(15, parseInt(jalurData.jumlahPos, 10)))
+    : (posNames.length > 0 ? posNames.length : 3);
+
+  if (posNames.length === 0 && jumlahPos > 0) {
+    for (let i = 1; i <= jumlahPos; i++) {
+      posNames.push(`Pos ${i} ${jalurVia}`);
+    }
+  }
+
+  const createdBc = await prisma.basecamp.create({
+    data: {
+      gunungId: gunung.id,
+      nama: bcNama,
+      jalurVia,
+      totalPos: posNames.length,
+      status: gunung.statusJalur || 'Buka',
+      latitude: bcLat,
+      longitude: bcLng,
+      elevasi: bcElev,
+      kontak: jalurData.kontak || '0812-3456-7890',
+      simaksiInfo: 'Registrasi di pos perizinan resmi Basecamp.'
+    }
+  });
+
+  // Buat Pos 1 .. Pos N yang terselaraskan di antara Basecamp dan Puncak
+  const count = posNames.length;
+  const deltaLat = peakLat - bcLat;
+  const deltaLng = peakLng - bcLng;
+  const len = Math.hypot(deltaLat, deltaLng) || 0.01;
+  const normLat = -deltaLng / len;
+  const normLng = deltaLat / len;
+  const curveAmp = 0.06 * len;
+  const elevGain = Math.max(150, peakElev - bcElev);
+
+  for (let idx = 0; idx < count; idx++) {
+    const t = (idx + 1) / (count + 1);
+    const offset = Math.sin(Math.PI * t) * curveAmp;
+    const posLat = Number((bcLat + t * deltaLat + offset * normLat).toFixed(6));
+    const posLng = Number((bcLng + t * deltaLng + offset * normLng).toFixed(6));
+    const posElev = Math.round(bcElev + elevGain * Math.pow(t, 0.92));
+    const pName = posNames[idx];
+    const hasWater = /air|sumber|mata air|sendang|pancuran|curug|sungai|sumur/i.test(pName);
+
+    await prisma.posGunung.create({
+      data: {
+        basecampId: createdBc.id,
+        namaPos: pName,
+        urutan: idx + 1,
+        latitude: posLat,
+        longitude: posLng,
+        elevasi: posElev,
+        adaAir: hasWater,
+        areaCamp: idx < count - 1 || count <= 2,
+        keterangan: hasWater ? 'Tersedia sumber mata air pendakian' : `Titik istirahat jalur Via ${jalurVia}`
+      }
+    });
+  }
+
+  return createdBc;
+}
+
 const createGunung = async (req, res) => {
   try {
-    const { nama, ketinggian, provinsi, kabupaten, tipeGunung, statusJalur, deskripsi, latitude, longitude } = req.body;
+    const {
+      nama, ketinggian, provinsi, kabupaten, tipeGunung, statusJalur, deskripsi,
+      latitude, longitude, jalurVia, bcNama, bcElevasi, bcLat, bcLng, posNames, jumlahPos
+    } = req.body;
     if (!nama || !ketinggian || !provinsi || !kabupaten) {
       return res.status(400).json({ success: false, message: 'nama, ketinggian, provinsi, dan kabupaten wajib diisi' });
     }
-    const slug = slugify(nama);
+    const baseSlug = slugify(nama);
+    let slug = baseSlug;
+    let suffix = 1;
+    while (await prisma.gunung.findUnique({ where: { slug } })) {
+      slug = `${baseSlug}-${suffix++}`;
+    }
+
+    const coords = normalizeJavaCoords(latitude, longitude, -7.25, 107.85);
     const newGunung = await prisma.gunung.create({
       data: {
         nama: nama.trim(),
@@ -266,12 +425,29 @@ const createGunung = async (req, res) => {
         kabupaten: kabupaten.trim(),
         tipeGunung: tipeGunung?.trim() || 'Stratovolcano Aktif (Tipe-A)',
         statusJalur: statusJalur || 'Buka',
-        deskripsi: deskripsi?.trim() || `Kawasan pendakian Gunung ${nama.trim()} di ${kabupaten.trim()}, ${provinsi.trim()}.`,
-        latitude: latitude ? parseFloat(latitude) : -7.5,
-        longitude: longitude ? parseFloat(longitude) : 110.5
+        deskripsi: deskripsi?.trim() || `Kawasan pendakian ${nama.trim()} di ${kabupaten.trim()}, ${provinsi.trim()}.`,
+        latitude: coords.lat,
+        longitude: coords.lng
       }
     });
-    res.status(201).json({ success: true, message: 'Data gunung berhasil ditambahkan', data: newGunung });
+
+    // Jika user sekalian mengisi Jalur Via & Pos saat menambah gunung baru
+    if (jalurVia && String(jalurVia).trim() !== '') {
+      await createJalurAndPosForGunung(newGunung, {
+        jalurVia, bcNama, bcElevasi, bcLat, bcLng, posNames, jumlahPos
+      }, 0);
+    }
+
+    const fullGunung = await prisma.gunung.findUnique({
+      where: { id: newGunung.id },
+      include: { basecamps: { include: { pos: { orderBy: { urutan: 'asc' } } } } }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `Gunung ${newGunung.nama} beserta jalur & pos berhasil ditambahkan`,
+      data: fullGunung
+    });
   } catch (error) {
     console.error('Error creating gunung:', error);
     res.status(500).json({ success: false, message: 'Gagal menambahkan data gunung', error: error.message });
@@ -282,15 +458,20 @@ const updateGunung = async (req, res) => {
   try {
     const { id } = req.params;
     const gunungId = parseInt(id, 10);
-    const existing = await prisma.gunung.findUnique({ where: { id: gunungId } });
+    const existing = await prisma.gunung.findUnique({
+      where: { id: gunungId },
+      include: { basecamps: true }
+    });
     if (!existing) return res.status(404).json({ success: false, message: 'Gunung tidak ditemukan' });
 
-    const { nama, ketinggian, provinsi, kabupaten, tipeGunung, statusJalur, deskripsi, latitude, longitude } = req.body;
+    const {
+      nama, ketinggian, provinsi, kabupaten, tipeGunung, statusJalur, deskripsi,
+      latitude, longitude, jalurVia, bcNama, bcElevasi, bcLat, bcLng, posNames, jumlahPos
+    } = req.body;
     const updateData = {};
 
     if (nama !== undefined && nama.trim() !== '') {
       updateData.nama = nama.trim();
-      updateData.slug = slugify(nama.trim());
     }
     if (ketinggian !== undefined) {
       const alt = parseInt(ketinggian, 10);
@@ -301,18 +482,32 @@ const updateGunung = async (req, res) => {
     if (tipeGunung !== undefined) updateData.tipeGunung = tipeGunung.trim();
     if (statusJalur !== undefined) updateData.statusJalur = statusJalur.trim();
     if (deskripsi !== undefined) updateData.deskripsi = deskripsi.trim();
-    if (latitude !== undefined) {
-      const lat = parseFloat(latitude);
-      if (!isNaN(lat)) updateData.latitude = lat;
-    }
-    if (longitude !== undefined) {
-      const lng = parseFloat(longitude);
-      if (!isNaN(lng)) updateData.longitude = lng;
+
+    if (latitude !== undefined || longitude !== undefined) {
+      const coords = normalizeJavaCoords(
+        latitude !== undefined ? latitude : existing.latitude,
+        longitude !== undefined ? longitude : existing.longitude,
+        existing.latitude || -7.25,
+        existing.longitude || 110.0
+      );
+      updateData.latitude = coords.lat;
+      updateData.longitude = coords.lng;
     }
 
-    const updated = await prisma.gunung.update({
+    const updatedGunung = await prisma.gunung.update({
       where: { id: gunungId },
-      data: updateData,
+      data: updateData
+    });
+
+    // Jika pengguna juga mengisi tambahan Jalur Via & Pos di form Gunung
+    if (jalurVia && String(jalurVia).trim() !== '') {
+      await createJalurAndPosForGunung(updatedGunung, {
+        jalurVia, bcNama, bcElevasi, bcLat, bcLng, posNames, jumlahPos
+      }, existing.basecamps.length);
+    }
+
+    const updated = await prisma.gunung.findUnique({
+      where: { id: gunungId },
       include: {
         basecamps: {
           include: { pos: { orderBy: { urutan: 'asc' } } }
@@ -322,7 +517,7 @@ const updateGunung = async (req, res) => {
 
     res.json({
       success: true,
-      message: `Data Gunung ${updated.nama} berhasil diperbarui (rename/update)`,
+      message: `Data ${updated.nama} berhasil diperbarui`,
       data: updated
     });
   } catch (error) {
@@ -381,6 +576,7 @@ const getAllBasecamp = async (req, res) => {
       orderBy: { id: 'asc' }
     });
 
+    const geoMapBc = await getJalurGeoMap();
     res.json({
       success: true,
       total: data.length,
@@ -400,6 +596,7 @@ const getAllBasecamp = async (req, res) => {
         elevasi: b.elevasi,
         kontak: b.kontak,
         simaksiInfo: b.simaksiInfo,
+        jalurGeo: geoMapBc.get(b.id) || null,
         pos: b.pos
       }))
     });
@@ -443,19 +640,35 @@ const getBasecampById = async (req, res) => {
 
 const createBasecamp = async (req, res) => {
   try {
-    const { gunungId, nama, jalurVia, latitude, longitude, elevasi, status, kontak, simaksiInfo } = req.body;
+    const { gunungId, nama, jalurVia, latitude, longitude, elevasi, status, kontak, simaksiInfo, posNames, jumlahPos } = req.body;
 
-    if (!gunungId || !nama || !jalurVia || latitude === undefined || longitude === undefined) {
+    if (!gunungId || !nama || !jalurVia) {
       return res.status(400).json({
         success: false,
-        message: 'gunungId, nama, jalurVia, latitude, dan longitude wajib diisi'
+        message: 'gunungId, nama, dan jalurVia wajib diisi'
       });
     }
 
-    const lat = parseFloat(latitude);
-    const lng = parseFloat(longitude);
-    if (isNaN(lat) || isNaN(lng)) {
-      return res.status(400).json({ success: false, message: 'Koordinat latitude dan longitude harus berupa angka valid' });
+    const parentGunung = await prisma.gunung.findUnique({ where: { id: parseInt(gunungId, 10) } });
+    const defaultLat = parentGunung ? (parentGunung.latitude - 0.015) : -7.25;
+    const defaultLng = parentGunung ? (parentGunung.longitude - 0.010) : 110.0;
+    const coords = normalizeJavaCoords(latitude, longitude, defaultLat, defaultLng);
+    const bcElev = elevasi ? parseInt(elevasi, 10) : (parentGunung ? Math.round(parentGunung.ketinggian * 0.55) : 1400);
+
+    // Susun daftar pos jika diisi
+    let parsedPosNames = [];
+    if (Array.isArray(posNames) && posNames.length > 0) {
+      parsedPosNames = posNames.map(s => String(s).trim()).filter(Boolean);
+    } else if (typeof posNames === 'string' && posNames.trim() !== '') {
+      parsedPosNames = posNames.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+    }
+    const posCount = jumlahPos && !isNaN(parseInt(jumlahPos, 10))
+      ? Math.max(0, Math.min(15, parseInt(jumlahPos, 10)))
+      : parsedPosNames.length;
+    if (parsedPosNames.length === 0 && posCount > 0) {
+      for (let i = 1; i <= posCount; i++) {
+        parsedPosNames.push(`Pos ${i} ${jalurVia.trim()}`);
+      }
     }
 
     const newBasecamp = await prisma.basecamp.create({
@@ -463,20 +676,63 @@ const createBasecamp = async (req, res) => {
         gunungId: parseInt(gunungId, 10),
         nama: nama.trim(),
         jalurVia: jalurVia.trim(),
-        latitude: lat,
-        longitude: lng,
-        elevasi: elevasi ? parseInt(elevasi, 10) : 1800,
+        totalPos: parsedPosNames.length,
+        latitude: coords.lat,
+        longitude: coords.lng,
+        elevasi: bcElev,
         status: status || 'Buka',
         kontak: kontak?.trim() || null,
         simaksiInfo: simaksiInfo?.trim() || 'Registrasi Online & On-the-spot di pos registrasi resmi.'
-      },
-      include: { gunung: true, pos: true }
+      }
+    });
+
+    if (parsedPosNames.length > 0 && parentGunung) {
+      const peakLat = parentGunung.latitude || (coords.lat + 0.015);
+      const peakLng = parentGunung.longitude || (coords.lng + 0.010);
+      const peakElev = parentGunung.ketinggian || (bcElev + 800);
+      const deltaLat = peakLat - coords.lat;
+      const deltaLng = peakLng - coords.lng;
+      const len = Math.hypot(deltaLat, deltaLng) || 0.01;
+      const normLat = -deltaLng / len;
+      const normLng = deltaLat / len;
+      const curveAmp = 0.06 * len;
+      const elevGain = Math.max(150, peakElev - bcElev);
+      const count = parsedPosNames.length;
+
+      for (let idx = 0; idx < count; idx++) {
+        const t = (idx + 1) / (count + 1);
+        const offset = Math.sin(Math.PI * t) * curveAmp;
+        const posLat = Number((coords.lat + t * deltaLat + offset * normLat).toFixed(6));
+        const posLng = Number((coords.lng + t * deltaLng + offset * normLng).toFixed(6));
+        const posElev = Math.round(bcElev + elevGain * Math.pow(t, 0.92));
+        const pName = parsedPosNames[idx];
+        const hasWater = /air|sumber|mata air|sendang|pancuran|curug|sungai|sumur/i.test(pName);
+
+        await prisma.posGunung.create({
+          data: {
+            basecampId: newBasecamp.id,
+            namaPos: pName,
+            urutan: idx + 1,
+            latitude: posLat,
+            longitude: posLng,
+            elevasi: posElev,
+            adaAir: hasWater,
+            areaCamp: idx < count - 1 || count <= 2,
+            keterangan: hasWater ? 'Tersedia sumber mata air pendakian' : `Titik istirahat jalur Via ${jalurVia.trim()}`
+          }
+        });
+      }
+    }
+
+    const fullBc = await prisma.basecamp.findUnique({
+      where: { id: newBasecamp.id },
+      include: { gunung: true, pos: { orderBy: { urutan: 'asc' } } }
     });
 
     res.status(201).json({
       success: true,
-      message: 'Basecamp baru berhasil ditambahkan',
-      data: newBasecamp
+      message: 'Basecamp & Pos baru berhasil ditambahkan',
+      data: fullBc
     });
   } catch (error) {
     console.error('Error creating basecamp:', error);
@@ -501,8 +757,11 @@ const updateBasecamp = async (req, res) => {
     if (kontak !== undefined) updateData.kontak = kontak?.trim() || null;
     if (simaksiInfo !== undefined) updateData.simaksiInfo = simaksiInfo?.trim() || null;
     if (latitude !== undefined) {
-      const lat = parseFloat(latitude);
-      if (!isNaN(lat)) updateData.latitude = lat;
+      let lat = parseFloat(latitude);
+      if (!isNaN(lat)) {
+        if (lat > 5 && lat < 11) lat = -Math.abs(lat);
+        updateData.latitude = lat;
+      }
     }
     if (longitude !== undefined) {
       const lng = parseFloat(longitude);
@@ -672,8 +931,11 @@ const updatePos = async (req, res) => {
     if (areaCamp !== undefined) updateData.areaCamp = !!areaCamp;
     if (keterangan !== undefined) updateData.keterangan = keterangan?.trim() || null;
     if (latitude !== undefined) {
-      const lat = parseFloat(latitude);
-      if (!isNaN(lat)) updateData.latitude = lat;
+      let lat = parseFloat(latitude);
+      if (!isNaN(lat)) {
+        if (lat > 5 && lat < 11) lat = -Math.abs(lat);
+        updateData.latitude = lat;
+      }
     }
     if (longitude !== undefined) {
       const lng = parseFloat(longitude);
@@ -885,13 +1147,25 @@ const exportGpx = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Basecamp tidak ditemukan' });
     }
 
-    const gpxPoints = [];
-    // Titik awal basecamp
-    gpxPoints.push(`    <trkpt lat="${basecamp.latitude}" lon="${basecamp.longitude}"><ele>${basecamp.elevasi || 1800}</ele><name>${basecamp.nama}</name></trkpt>`);
+    const geoMapGpx = await getJalurGeoMap();
+    const geo = geoMapGpx.get(basecamp.id);
+    const trackPoints = [];
+    const wptPoints = [];
 
-    // Titik pos pendakian
+    // Waypoint: basecamp + seluruh pos (bernama)
+    wptPoints.push(`  <wpt lat="${basecamp.latitude}" lon="${basecamp.longitude}"><ele>${basecamp.elevasi || 1800}</ele><name>${basecamp.nama}</name><desc>Basecamp</desc></wpt>`);
     for (const p of basecamp.pos) {
-      gpxPoints.push(`    <trkpt lat="${p.latitude}" lon="${p.longitude}"><ele>${p.elevasi || 2000}</ele><name>${p.namaPos}</name><desc>${p.adaAir ? 'Sumber Mata Air' : 'Pos Jalur'}</desc></trkpt>`);
+      wptPoints.push(`  <wpt lat="${p.latitude}" lon="${p.longitude}"><ele>${p.elevasi || 2000}</ele><name>${p.namaPos}</name><desc>${p.adaAir ? 'Sumber Mata Air' : 'Pos Jalur'}</desc></wpt>`);
+    }
+
+    // Track: ikuti geometri jalur nyata (OSM) jika tersedia, jika tidak sambungkan titik BC -> pos
+    if (Array.isArray(geo) && geo.length >= 2) {
+      for (const [la, lo] of geo) trackPoints.push(`    <trkpt lat="${la}" lon="${lo}"></trkpt>`);
+    } else {
+      trackPoints.push(`    <trkpt lat="${basecamp.latitude}" lon="${basecamp.longitude}"><ele>${basecamp.elevasi || 1800}</ele></trkpt>`);
+      for (const p of basecamp.pos) {
+        trackPoints.push(`    <trkpt lat="${p.latitude}" lon="${p.longitude}"><ele>${p.elevasi || 2000}</ele></trkpt>`);
+      }
     }
 
     const gpxXml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -901,10 +1175,11 @@ const exportGpx = async (req, res) => {
     <desc>Data jalur resmi Pulau Jawa diekspor dari KANIMAP GIS</desc>
     <time>${new Date().toISOString()}</time>
   </metadata>
+${wptPoints.join('\n')}
   <trk>
     <name>${basecamp.gunung.nama} - ${basecamp.jalurVia}</name>
     <trkseg>
-${gpxPoints.join('\n')}
+${trackPoints.join('\n')}
     </trkseg>
   </trk>
 </gpx>`;
@@ -963,6 +1238,11 @@ const updateCoordinatesBatch = async (req, res) => {
           }
         }
       }
+    }
+
+    // Koordinat diubah manual -> geometri jalur OSM lama tidak lagi sesuai, hapus agar garis mengikuti titik baru
+    if (basecamp && basecamp.id) {
+      await prisma.$executeRaw`UPDATE Basecamp SET jalurGeo = NULL WHERE id = ${parseInt(basecamp.id, 10)}`;
     }
 
     res.json({
@@ -1240,7 +1520,7 @@ const getTripPlan = async (req, res) => {
           type: 'pos',
           elevasi: seg.toElev,
           activity: `Tiba di ${seg.toName} · Istirahat ${seg.restMinutes} Menit`,
-          note: `${seg.adaAir ? '💧 Sumber air tersedia. ' : ''}${seg.areaCamp ? '⛺ Area camp pendaki. ' : ''}Jarak segmen +${seg.distanceKm} km (+${seg.gainM}m).`
+          note: `${seg.adaAir ? '💧 Sumber air tersedia. ' : ''}${seg.areaCamp ? '⛺ Area camp pendaki. ' : ''}Elevasi pos ${seg.toElev ? seg.toElev.toLocaleString('id-ID') : '-'} mdpl (Tanjakan +${seg.gainM} mdpl).`
         });
         currentMins += seg.restMinutes;
       }

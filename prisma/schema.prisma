@@ -53,6 +53,7 @@ model Basecamp {
   kontak       String?       // Nomor HP / WA Pengelola Basecamp
   simaksiInfo  String?       // Info registrasi SIMAKSI online/offline
   sumber       String?       // Catatan / sumber data
+  jalurGeo     String?       // Geometri jalur nyata BC -> Puncak (JSON [[lat,lng],...]) hasil routing OpenStreetMap
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 

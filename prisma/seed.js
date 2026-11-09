@@ -21,24 +21,8 @@ function parseElevation(str) {
   return isNaN(num) || num === 0 ? 2000 : num;
 }
 
-// Special status for active volcanic / restricted peaks
+// Default status for official peaks in database
 function getMountainStatus(name) {
-  const n = (name || '').toLowerCase();
-  if (n.includes('semeru')) {
-    return { statusVulkanik: 'Siaga Level 3', statusJalur: 'Tutup', kuotaHarian: 0, kuotaTersisa: 0 };
-  }
-  if (n.includes('merapi') && !n.includes('merbabu')) {
-    return { statusVulkanik: 'Siaga Level 3', statusJalur: 'Tutup', kuotaHarian: 0, kuotaTersisa: 0 };
-  }
-  if (n.includes('slamet')) {
-    return { statusVulkanik: 'Waspada Level 2', statusJalur: 'Waspada', kuotaHarian: 200, kuotaTersisa: 85 };
-  }
-  if (n.includes('raung')) {
-    return { statusVulkanik: 'Waspada Level 2', statusJalur: 'Waspada', kuotaHarian: 150, kuotaTersisa: 40 };
-  }
-  if (n.includes('bromo')) {
-    return { statusVulkanik: 'Waspada Level 2', statusJalur: 'Waspada', kuotaHarian: 300, kuotaTersisa: 120 };
-  }
   return { statusVulkanik: 'Normal', statusJalur: 'Buka', kuotaHarian: 250, kuotaTersisa: Math.floor(Math.random() * 120 + 80) };
 }
 
@@ -192,8 +176,9 @@ async function seed() {
     if (!gData.kabupaten && kabupaten) gData.kabupaten = kabupaten;
     if (ketinggian > gData.ketinggian) gData.ketinggian = ketinggian;
 
-    if (!gData.jalurs.has(jalurVia)) {
-      gData.jalurs.set(jalurVia, {
+    const jalurKey = jalurVia.toLowerCase();
+    if (!gData.jalurs.has(jalurKey)) {
+      gData.jalurs.set(jalurKey, {
         jalurVia,
         provinsi,
         kabupaten,
@@ -201,7 +186,7 @@ async function seed() {
       });
     }
 
-    gData.jalurs.get(jalurVia).posList.push({
+    gData.jalurs.get(jalurKey).posList.push({
       namaPos,
       lat,
       lng,
